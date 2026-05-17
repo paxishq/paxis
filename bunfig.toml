@@ -1,0 +1,7 @@
+[run]
+bun = true
+
+[test]
+preload = ["./src/test-setup.ts"]
+coverage = true
+coverageThreshold = 0.8

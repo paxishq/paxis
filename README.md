@@ -43,12 +43,19 @@
 ```
 /
 ├── README.md                         # This file
-├── CLAUDE.md                         # Claude Code index (symlinks to README.md)
-├── AGENTS.md                         # OpenCode index (symlinks to README.md)
+├── CLAUDE.md                         # Claude Code index (symlinks to docs/llm.md)
+├── AGENTS.md                         # OpenCode index (symlinks to docs/llm.md)
 ├── LICENSE                           # MIT
+├── bunfig.toml                       # Bun config (node alias, test preload + coverage)
+├── biome.jsonc                       # Biome formatter + linter config
+├── tsconfig.json                     # TypeScript config (Bun TS6 recommended)
+├── drizzle.config.ts                 # Drizzle Kit config
+├── commitlint.config.ts              # Conventional Commits enforcement
+├── compose.yml                       # Local dev only (Postgres port 15151, app port 15150)
 │
 ├── src/
-│   ├── index.ts                      # Bun.serve entry point (15150 dev / unix socket prod)
+│   ├── index.ts                      # Bun.serve entry point (unix socket prod / port 15150 dev)
+│   ├── test-setup.ts                 # Bun test preload — creates paxis_test, runs migrations
 │   ├── routes/                       # API routes
 │   │   ├── auth.ts                   # Better Auth routes
 │   │   ├── enterprise/               # Enterprise dashboard routes
@@ -66,7 +73,7 @@
 │   │   ├── auth.ts                   # Better Auth instance
 │   │   └── db.ts                     # Drizzle + Bun native SQL instance
 │   ├── db/
-│   │   ├── schema.ts                 # Drizzle schema — enterprises, suppliers, nodes, audit log
+│   │   ├── schema.ts                 # Drizzle schema — all tables and enums
 │   │   └── migrations/               # Drizzle-generated SQL (never hand-edit)
 │   └── frontend/
 │       ├── enterprise/               # Enterprise dashboard React app
@@ -76,13 +83,15 @@
 │   └── main.tf                       # OpenTofu — Vultr VM + networking
 │
 ├── scripts/
-│   ├── paxis-cloud-init.yaml         # Vultr instance provisioning (cloud-init)
-│   ├── paxis-setup.sh                # Post-boot server setup (idempotent)
-│   └── paxis-deploy-key.sh           # One-time GitHub deploy key setup
+│   ├── cloud-init.yaml               # Vultr instance provisioning (cloud-init)
+│   ├── setup.sh                      # Post-boot server setup (idempotent, 9 steps)
+│   ├── deploy-key.sh                 # One-time GitHub deploy key setup
+│   └── paxis.service                 # systemd unit for the Bun app
 │
 └── .github/
     └── workflows/
-        └── setup-server.yml          # GitHub Actions: idempotent server setup
+        ├── deploy.yml                # Build binary + deploy on push to main
+        └── setup-server.yml          # Idempotent server setup via SSH
 ```
 
 ---

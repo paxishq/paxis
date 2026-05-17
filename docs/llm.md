@@ -38,8 +38,14 @@
 
 ```
 /
+├── bunfig.toml                        # Bun config (node alias, test preload + coverage)
+├── biome.jsonc                        # Biome formatter + linter config
+├── tsconfig.json                      # TypeScript config (Bun TS6 recommended)
+├── drizzle.config.ts                  # Drizzle Kit config
+├── commitlint.config.ts               # Conventional Commits enforcement
+├── compose.yml                        # Local dev only (Postgres + app)
 ├── src/
-│   ├── index.ts                   # Bun.serve entry point (port 15150)
+│   ├── index.ts                   # Bun.serve entry point (unix socket prod / port 15150 dev)
 │   ├── routes/                    # API routes
 │   │   ├── auth.ts                # Better Auth routes
 │   │   ├── enterprise/            # Enterprise dashboard API
@@ -57,17 +63,19 @@
 │   │   ├── auth.ts                # Better Auth instance
 │   │   └── db.ts                  # Drizzle + Bun native SQL instance
 │   ├── db/
-│   │   ├── schema.ts              # Drizzle schema
+│   │   ├── schema.ts              # Drizzle schema — all tables and enums
 │   │   └── migrations/            # Drizzle-generated SQL (never hand-edit)
+│   ├── test-setup.ts              # Bun test preload — creates paxis_test DB, runs migrations
 │   └── frontend/
 │       ├── enterprise/            # Enterprise dashboard React app
 │       └── supplier/              # Supplier portal React app
 ├── infra/
 │   └── main.tf                    # OpenTofu — Vultr VM + networking
 └── scripts/
-    ├── paxis-cloud-init.yaml      # Vultr instance provisioning
-    ├── paxis-setup.sh             # Post-boot setup (idempotent)
-    └── paxis-deploy-key.sh        # One-time GitHub deploy key setup
+    ├── cloud-init.yaml            # Vultr instance provisioning (cloud-init)
+    ├── setup.sh                   # Post-boot setup (idempotent, 9 steps)
+    ├── deploy-key.sh              # One-time GitHub deploy key setup
+    └── paxis.service              # systemd unit for the Bun app
 ```
 
 ---

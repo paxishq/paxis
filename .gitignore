@@ -1,2 +1,4 @@
 .direnv
 .env
+db_data/
+node_modules

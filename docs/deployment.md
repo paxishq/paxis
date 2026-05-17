@@ -45,7 +45,7 @@ tofu output instance_ip
 
 ## First Deploy
 
-**One-time manual step:** run `scripts/paxis-deploy-key.sh` as the `paxis` user to register the GitHub deploy key.
+**One-time manual step:** run `scripts/deploy-key.sh` as the `paxis` user to register the GitHub deploy key.
 
 Then trigger `setup-server.yml` (manually via `workflow_dispatch` or push a change to `scripts/`) — it runs `setup.sh` over SSH with all required secrets.
 

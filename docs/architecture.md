@@ -8,7 +8,7 @@ Paxis is a two-sided EU compliance OS: enterprises dispatch CSRD questionnaires 
 
 ```
 Browser
-  └── Bun.serve() (port 15150 dev / unix socket prod)
+  └── Bun.serve() (unix//run/paxis/app.sock prod / port 15150 dev)
         ├── HTML routes ──────────── React frontend (enterprise + supplier)
         └── API routes
               ├── /auth/*            ← Better Auth (sessions, OAuth)
@@ -53,7 +53,7 @@ A typical enterprise Scope 3 questionnaire dispatch:
 
 | Package | Responsibility |
 |---------|---------------|
-| `src/index.ts` | `Bun.serve()` entry; registers all routes; starts server on port 15150 |
+| `src/index.ts` | `Bun.serve()` entry; registers all routes; unix socket in prod, port 15150 in dev |
 | `src/routes/auth.ts` | Better Auth handler — sessions, OAuth, role assignment |
 | `src/routes/enterprise/` | Questionnaire dispatch, Scope 3 dashboard, ESRS export |
 | `src/routes/supplier/` | Questionnaire responses, AI Act inventory, carbon entries |
@@ -66,8 +66,8 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | `src/agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 | `src/lib/llm.ts` | LLM provider abstraction — Gemini or Featherless via `LLM_PROVIDER` |
 | `src/lib/auth.ts` | Better Auth instance configuration |
-| `src/lib/db.ts` | Drizzle + Bun native SQL connection; exports `db` |
-| `src/db/schema.ts` | Drizzle schema: all tables |
+| `src/lib/db.ts` | Drizzle + Bun native SQL connection; reads `DATABASE_URL`; exports `db` |
+| `src/db/schema.ts` | Drizzle schema: all tables and enums (`pgTable`, `pgEnum`) |
 | `src/frontend/` | React + shadcn/ui apps for enterprise and supplier portals |
 | `infra/main.tf` | OpenTofu: Vultr VM + networking + floating IP |
 | `scripts/` | Cloud-init, idempotent server setup, deploy-key bootstrap |

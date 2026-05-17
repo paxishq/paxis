@@ -81,9 +81,9 @@ needed (peer auth on the unix socket).
 
 ---
 
-## 4. Socket Directory — `paxis-setup.sh`
+## 4. Socket Directory — `setup.sh`
 
-Add this block to `scripts/paxis-setup.sh` before the Caddy restart step:
+Add this block to `scripts/setup.sh` before the Caddy restart step:
 
 ```bash
 echo ">>> Setting up unix socket directory..."
@@ -110,7 +110,7 @@ Create `/etc/tmpfiles.d/paxis.conf`:
 d /run/paxis 0750 paxis caddy -
 ```
 
-Add to `paxis-setup.sh`:
+Add to `setup.sh`:
 
 ```bash
 echo ">>> Writing tmpfiles.d rule for socket directory..."
@@ -138,7 +138,7 @@ This line should already be present. No changes needed.
 
 ---
 
-## 7. Update DATABASE_URL in paxis-setup.sh
+## 7. Update DATABASE_URL in setup.sh
 
 The `DATABASE_URL` written to `/etc/paxis.env` should use the unix socket path for prod:
 
