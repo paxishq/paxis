@@ -20,14 +20,14 @@ LLM_PROVIDER="${LLM_PROVIDER:-gemini}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo ">>> [1/8] Installing Bun for paxis user..."
+echo ">>> [1/9] Installing Bun for paxis user..."
 if [ ! -f /home/paxis/.bun/bin/bun ]; then
   su - paxis -c 'curl -fsSL https://bun.sh/install | bash'
 else
   echo "    Bun already installed, skipping."
 fi
 
-echo ">>> [2/8] Writing Bun to PATH for paxis user..."
+echo ">>> [2/9] Writing Bun to PATH for paxis user..."
 if ! grep -q "BUN_INSTALL" /home/paxis/.bashrc; then
   cat >> /home/paxis/.bashrc << 'BUNRC'
 export BUN_INSTALL="$HOME/.bun"
@@ -38,14 +38,14 @@ else
   echo "    Bun PATH already set, skipping."
 fi
 
-echo ">>> [3/8] Writing Caddy env..."
+echo ">>> [3/9] Writing Caddy env..."
 cat > /etc/caddy/env << CADDYENV
 CF_API_TOKEN=${CF_API_TOKEN}
 CADDYENV
 chmod 600 /etc/caddy/env
 chown caddy:caddy /etc/caddy/env
 
-echo ">>> [4/8] Setting up Postgres..."
+echo ">>> [4/9] Setting up Postgres..."
 if [ ! -f /etc/paxis.env ]; then
   DB_PASS=$(openssl rand -base64 32)
 
@@ -67,7 +67,7 @@ else
   echo "    Postgres already configured, skipping."
 fi
 
-echo ">>> [5/8] Locking Postgres to localhost..."
+echo ">>> [5/9] Locking Postgres to localhost..."
 if ! grep -q "^listen_addresses = 'localhost'" /etc/postgresql/18/main/postgresql.conf; then
   sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost'/" /etc/postgresql/18/main/postgresql.conf
   systemctl restart postgresql
@@ -75,7 +75,7 @@ else
   echo "    Postgres already locked to localhost, skipping."
 fi
 
-echo ">>> [6/8] Writing app environment..."
+echo ">>> [6/9] Writing app environment..."
 # Source existing file to preserve the generated DB password
 # shellcheck source=/dev/null
 source /etc/paxis.env
@@ -83,7 +83,11 @@ source /etc/paxis.env
 cat > /etc/paxis.env << APPENV
 # Database — generated on first run, do not modify
 PAXIS_DB_PASSWORD=${PAXIS_DB_PASSWORD}
-DATABASE_URL=${DATABASE_URL}
+# Unix socket connection — peer auth, no password needed on prod
+DATABASE_URL=postgres:///paxis?host=/var/run/postgresql
+
+# Runtime
+NODE_ENV=production
 
 # Auth
 BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
@@ -97,7 +101,7 @@ APPENV
 chmod 600 /etc/paxis.env
 echo "    App environment written to /etc/paxis.env"
 
-echo ">>> [7/8] Installing systemd unit..."
+echo ">>> [7/9] Installing systemd unit..."
 mkdir -p /home/paxis/app
 chown paxis:paxis /home/paxis/app
 
@@ -112,7 +116,13 @@ else
   echo "    Binary not deployed yet — paxis.service enabled but not started."
 fi
 
-echo ">>> [8/8] Restarting Caddy..."
+echo ">>> [8/9] Setting up unix socket directory..."
+# /run is tmpfs — directory must be recreated on every boot via tmpfiles.d
+echo "d /run/paxis 0750 paxis caddy -" > /etc/tmpfiles.d/paxis.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/paxis.conf
+echo "    Socket directory: /run/paxis (0750 paxis:caddy)"
+
+echo ">>> [9/9] Restarting Caddy..."
 systemctl restart caddy
 
 echo ""

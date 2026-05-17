@@ -79,7 +79,7 @@ write_files:
       }
 
       getpaxis.com {
-        reverse_proxy localhost:3000
+        reverse_proxy unix//run/paxis/app.sock
       }
 
   # Placeholder — real token injected by paxis-setup.sh post-boot

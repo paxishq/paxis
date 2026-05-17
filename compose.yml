@@ -43,6 +43,7 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: postgres://paxis:paxis@db:5432/paxis
+      PORT: 3000
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-do-not-use-in-production}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
