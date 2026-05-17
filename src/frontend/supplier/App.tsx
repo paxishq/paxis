@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bot, FileText, Leaf, LogOut, Plus } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ClipboardCheck, FileText, Leaf, LogOut, Plus, XCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,7 +69,7 @@ type AiInventory = {
 	justification: string | null;
 };
 
-type SupplierPage = "questionnaires" | "carbon" | "ai-inventory";
+type SupplierPage = "questionnaires" | "carbon" | "ai-inventory" | "compliance";
 type AuthState = "loading" | "authed" | "unauthed";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -456,7 +456,7 @@ function AddCarbonDialog({ onAdded }: { onAdded: (e: CarbonEntry) => void }) {
 	const [sourceDescription, setSourceDescription] = useState("");
 	const [loading, setLoading] = useState(false);
 
-	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+	async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
 		e.preventDefault();
 		setLoading(true);
 		const res = await fetch("/api/supplier/carbon", {
@@ -572,7 +572,7 @@ function RegisterAiDialog({ onAdded }: { onAdded: (item: AiInventory) => void })
 	const [justification, setJustification] = useState("");
 	const [loading, setLoading] = useState(false);
 
-	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+	async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
 		e.preventDefault();
 		setLoading(true);
 		const res = await fetch("/api/supplier/ai-inventory", {
@@ -665,6 +665,192 @@ function RegisterAiDialog({ onAdded }: { onAdded: (item: AiInventory) => void })
 	);
 }
 
+// ── Compliance Report page ────────────────────────────────────────────────────
+
+function ComplianceReportPage({
+	questionnaires,
+	carbonEntries,
+	aiInventory,
+}: {
+	questionnaires: Questionnaire[];
+	carbonEntries: CarbonEntry[];
+	aiInventory: AiInventory[];
+}) {
+	const scope1Total = carbonEntries.filter((e) => e.scope === "scope1").reduce((s, e) => s + e.co2Tonnes, 0);
+	const scope2Total = carbonEntries.filter((e) => e.scope === "scope2").reduce((s, e) => s + e.co2Tonnes, 0);
+	const hasScope1 = carbonEntries.some((e) => e.scope === "scope1");
+	const hasScope2 = carbonEntries.some((e) => e.scope === "scope2");
+
+	const hasHighRisk = aiInventory.some((a) => a.riskTier === "unacceptable" || a.riskTier === "high");
+	const aiByTier = {
+		unacceptable: aiInventory.filter((a) => a.riskTier === "unacceptable").length,
+		high:         aiInventory.filter((a) => a.riskTier === "high").length,
+		limited:      aiInventory.filter((a) => a.riskTier === "limited").length,
+		minimal:      aiInventory.filter((a) => a.riskTier === "minimal").length,
+	};
+
+	const totalQ = questionnaires.length;
+	const completedQ = questionnaires.filter((q) => q.status === "completed").length;
+	const pendingQ = questionnaires.filter((q) => q.status === "sent" || q.status === "in_progress").length;
+	const overdueQ = questionnaires.filter((q) => q.status === "overdue").length;
+	const allResponded = totalQ > 0 && pendingQ === 0 && overdueQ === 0;
+
+	const checks = [
+		{ label: "Scope 1 emissions logged",       done: hasScope1,                          detail: hasScope1 ? `${scope1Total.toLocaleString()} tCO₂e recorded` : "Add at least one Scope 1 entry" },
+		{ label: "Scope 2 emissions logged",        done: hasScope2,                          detail: hasScope2 ? `${scope2Total.toLocaleString()} tCO₂e recorded` : "Add at least one Scope 2 entry" },
+		{ label: "AI inventory registered",         done: aiInventory.length > 0,             detail: aiInventory.length > 0 ? `${aiInventory.length} system${aiInventory.length !== 1 ? "s" : ""} registered` : "Register any AI tools your org uses" },
+		{ label: "No unacceptable or high-risk AI", done: !hasHighRisk,                       detail: !hasHighRisk ? "All systems within acceptable tiers" : `${aiByTier.unacceptable + aiByTier.high} system(s) need review` },
+		{ label: "All questionnaires responded",    done: totalQ > 0 && allResponded,         detail: totalQ === 0 ? "No questionnaires received yet" : allResponded ? `${completedQ} of ${totalQ} completed` : `${pendingQ} pending, ${overdueQ} overdue` },
+	];
+
+	const passCount = checks.filter((c) => c.done).length;
+	const readiness: "ready" | "partial" | "not_ready" =
+		passCount === checks.length ? "ready" : passCount >= 3 ? "partial" : "not_ready";
+
+	const readinessCfg = {
+		ready:     { label: "Reporting ready",   color: "text-emerald-400", bar: "bg-emerald-500", bg: "bg-emerald-950/50 border-emerald-900/50" },
+		partial:   { label: "Partially ready",   color: "text-amber-400",  bar: "bg-amber-500",   bg: "bg-amber-950/50 border-amber-900/50" },
+		not_ready: { label: "Action required",   color: "text-red-400",    bar: "bg-red-500",     bg: "bg-red-950/50 border-red-900/50" },
+	}[readiness];
+
+	const AI_TIER_CFG: Record<"unacceptable" | "high" | "limited" | "minimal", { label: string; color: string }> = {
+		unacceptable: { label: "Unacceptable", color: "text-red-400" },
+		high:         { label: "High",         color: "text-orange-400" },
+		limited:      { label: "Limited",      color: "text-amber-400" },
+		minimal:      { label: "Minimal",      color: "text-emerald-400" },
+	};
+
+	return (
+		<div>
+			<PageHeader
+				title="Compliance overview"
+				description="Your CSRD & EU AI Act readiness snapshot"
+			/>
+
+			{/* Readiness header */}
+			<div className="mb-5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-5 py-4 flex items-center justify-between gap-4">
+				<div className="flex-1 min-w-0">
+					<div className="flex items-center gap-2 mb-2">
+						<span className={`text-[11px] font-medium px-2 py-0.5 rounded border ${readinessCfg.bg} ${readinessCfg.color}`}>
+							{readinessCfg.label}
+						</span>
+						<span className="text-[12px] text-zinc-500">{passCount} of {checks.length} checks passing</span>
+					</div>
+					<div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+						<div
+							className={`h-full rounded-full transition-all ${readinessCfg.bar}`}
+							style={{ width: `${(passCount / checks.length) * 100}%` }}
+						/>
+					</div>
+				</div>
+			</div>
+
+			{/* Checklist */}
+			<div className="mb-5">
+				<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">Readiness checklist</p>
+				<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] divide-y divide-white/[0.04]">
+					{checks.map((check) => (
+						<div key={check.label} className="flex items-center gap-3 px-4 py-3">
+							{check.done
+								? <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+								: <XCircle className="size-4 text-zinc-700 shrink-0" />
+							}
+							<div className="flex-1 min-w-0">
+								<span className={`text-[13px] font-medium ${check.done ? "text-zinc-300" : "text-zinc-500"}`}>
+									{check.label}
+								</span>
+							</div>
+							<span className={`text-[11px] shrink-0 ${check.done ? "text-zinc-600" : "text-amber-500/80"}`}>
+								{check.detail}
+							</span>
+						</div>
+					))}
+				</div>
+			</div>
+
+			<div className="grid grid-cols-2 gap-4">
+				{/* Carbon summary */}
+				<div>
+					<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">Carbon emissions (tCO₂e)</p>
+					<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] divide-y divide-white/[0.04]">
+						{(["scope1", "scope2"] as const).map((scope) => {
+							const total = scope === "scope1" ? scope1Total : scope2Total;
+							const has   = scope === "scope1" ? hasScope1 : hasScope2;
+							const label = scope === "scope1" ? "Scope 1 — Direct" : "Scope 2 — Purchased energy";
+							const color = scope === "scope1" ? "text-blue-400" : "text-purple-400";
+							return (
+								<div key={scope} className="flex items-center justify-between px-4 py-3">
+									<span className={`text-[11px] font-medium ${color}`}>{label}</span>
+									{has
+										? <span className="font-mono text-[13px] text-white tabular-nums">{total.toLocaleString()} <span className="text-zinc-600 text-[11px]">tCO₂e</span></span>
+										: <span className="text-[11px] text-zinc-600">Not recorded</span>
+									}
+								</div>
+							);
+						})}
+						<div className="flex items-center justify-between px-4 py-3 bg-white/[0.015]">
+							<span className="text-[11px] font-semibold text-zinc-300">Total</span>
+							<span className="font-mono text-[13px] font-medium text-white tabular-nums">
+								{(scope1Total + scope2Total).toLocaleString()} <span className="text-zinc-600 text-[11px]">tCO₂e</span>
+							</span>
+						</div>
+					</div>
+				</div>
+
+				{/* AI Act summary */}
+				<div>
+					<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">EU AI Act inventory</p>
+					<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] divide-y divide-white/[0.04]">
+						{(["unacceptable", "high", "limited", "minimal"] as const).map((tier) => {
+							const count = aiByTier[tier];
+							const cfg = AI_TIER_CFG[tier];
+							return (
+								<div key={tier} className="flex items-center justify-between px-4 py-3">
+									<div className="flex items-center gap-2">
+										{(tier === "unacceptable" || tier === "high") && count > 0 && (
+											<AlertTriangle className="size-3 text-amber-500 shrink-0" />
+										)}
+										<span className={`text-[11px] font-medium ${cfg.color}`}>{cfg.label} risk</span>
+									</div>
+									<span className={`font-mono text-[13px] ${count > 0 ? "text-white" : "text-zinc-700"}`}>
+										{count}
+									</span>
+								</div>
+							);
+						})}
+						<div className="flex items-center justify-between px-4 py-3 bg-white/[0.015]">
+							<span className="text-[11px] font-semibold text-zinc-300">Total systems</span>
+							<span className="font-mono text-[13px] font-medium text-white">{aiInventory.length}</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* Questionnaire summary */}
+			{totalQ > 0 && (
+				<div className="mt-4">
+					<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">Questionnaire status</p>
+					<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] overflow-hidden">
+						<div className="flex">
+							{[
+								{ label: "Completed", value: completedQ,                    color: "bg-emerald-950/60 text-emerald-400 border-r border-white/[0.04]" },
+								{ label: "Pending",   value: pendingQ,                      color: "bg-amber-950/40 text-amber-400 border-r border-white/[0.04]" },
+								{ label: "Overdue",   value: overdueQ,                      color: "bg-red-950/40 text-red-400 border-r border-white/[0.04]" },
+								{ label: "Total",     value: totalQ,                        color: "text-zinc-300" },
+							].map((stat) => (
+								<div key={stat.label} className={`flex-1 px-4 py-3 ${stat.color}`}>
+									<p className="text-[10px] font-medium opacity-70 uppercase tracking-wide mb-1">{stat.label}</p>
+									<p className="font-mono text-[20px] font-medium leading-none">{stat.value}</p>
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function SupplierApp() {
@@ -748,6 +934,13 @@ export default function SupplierApp() {
 					>
 						<Bot className="size-3.5" />
 						AI Inventory
+					</NavBtn>
+					<NavBtn
+						active={page === "compliance"}
+						onClick={() => setPage("compliance")}
+					>
+						<ClipboardCheck className="size-3.5" />
+						Compliance
 					</NavBtn>
 				</nav>
 				<div className="ml-auto flex items-center gap-3">
@@ -879,6 +1072,15 @@ export default function SupplierApp() {
 							</table>
 						)}
 					</div>
+				)}
+
+				{/* ── Compliance ── */}
+				{page === "compliance" && (
+					<ComplianceReportPage
+						questionnaires={questionnaires}
+						carbonEntries={carbonEntries}
+						aiInventory={aiInventory}
+					/>
 				)}
 
 				{/* ── AI Inventory ── */}
