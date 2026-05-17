@@ -3,8 +3,8 @@ import { enterprises, suppliers, enterpriseSuppliers } from "../src/db/schema";
 import { eq } from "drizzle-orm";
 
 // Fixed UUIDs so the script is idempotent — safe to run multiple times.
-const DEV_ENTERPRISE_ID = "00000000-0000-0000-0000-000000000001";
-const DEV_SUPPLIER_ID = "00000000-0000-0000-0000-000000000002";
+const DEV_ENTERPRISE_ID = "00000000-0000-4000-a000-000000000001";
+const DEV_SUPPLIER_ID   = "00000000-0000-4000-a000-000000000002";
 
 await db
 	.insert(enterprises)
