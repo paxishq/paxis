@@ -213,6 +213,7 @@ ${recentAudit.map((e) => `${e.agentName}:${e.action}`).join(", ") || "None"}`;
 			scope3tCO2e: report.esrs1Climate.scope3tCO2e,
 			dataQuality: report.esrs1Climate.dataQuality,
 			recommendedActionsCount: report.recommendedActions.length,
+			report,
 		},
 	});
 
