@@ -20,10 +20,11 @@
 |-------|-----------|-------|
 | Language | TypeScript | `tsgo` (`@typescript/native-preview`); no CommonJS |
 | Runtime | Bun | Bun only — never `node`; `Bun.env` not `process.env` |
-| Framework | Bun fullstack | `Bun.serve()` — HTML routes + API routes in one process |
-| Frontend | React + shadcn/ui | `bun init --react=shadcn`; Tailwind |
+| Server | Bun fullstack | `Bun.serve()` — process boundary, unix socket, binary compilation |
+| API routing | Hono | Mounted inside `Bun.serve()` via `routes: { "/api/*": app.fetch }`; typed middleware + RPC |
+| Frontend | React + shadcn/ui | `bun init --react=shadcn`; Tailwind; HTML routes in `Bun.serve()` |
 | Database | PostgreSQL 18 | Drizzle ORM (`drizzle-orm/bun-sql`); immutable audit log |
-| Auth | Better Auth | Role-based: enterprise admin vs supplier node; session audit hooks |
+| Auth | Better Auth | Role-based: enterprise admin vs supplier node; schema in `src/db/auth-schema.ts` (generated) |
 | Agent orchestration | Gemini 3.1 Pro | Multi-step reasoning; async background workflows; Planner Agent |
 | Document intelligence | Gemini 3.1 Flash | Multimodal: invoices, energy bills, questionnaires (IT/DE/FR/EN) |
 | LLM fallback | Featherless.ai | OpenAI-compatible; switched via `LLM_PROVIDER=featherless` |
@@ -41,15 +42,16 @@
 ├── bunfig.toml                        # Bun config (node alias, test preload + coverage)
 ├── biome.jsonc                        # Biome formatter + linter config
 ├── tsconfig.json                      # TypeScript config (Bun TS6 recommended)
-├── drizzle.config.ts                  # Drizzle Kit config
+├── drizzle.config.ts                  # Drizzle Kit config (schema glob: src/db/*.ts)
 ├── commitlint.config.ts               # Conventional Commits enforcement
 ├── compose.yml                        # Local dev only (Postgres + app)
 ├── src/
-│   ├── index.ts                   # Bun.serve entry point (unix socket prod / port 15150 dev)
-│   ├── routes/                    # API routes
-│   │   ├── auth.ts                # Better Auth routes
-│   │   ├── enterprise/            # Enterprise dashboard API
-│   │   └── supplier/              # Supplier portal API
+│   ├── index.ts                   # Bun.serve entry point — unix socket (prod) / port 15150 (dev)
+│   │                              # routes: { "/api/*": app.fetch } — delegates all API to Hono
+│   ├── app.ts                     # Hono application — all API routes registered here
+│   ├── routes/
+│   │   ├── enterprise/            # Enterprise dashboard API routes (Hono handlers)
+│   │   └── supplier/              # Supplier portal API routes (Hono handlers)
 │   ├── agents/                    # Six specialized agents
 │   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro
 │   │   ├── intake.ts              # Questionnaire routing + dispatch
@@ -60,10 +62,11 @@
 │   │   └── esrs-report.ts         # Audit-ready ESRS output
 │   ├── lib/
 │   │   ├── llm.ts                 # LLM provider abstraction (Gemini | Featherless)
-│   │   ├── auth.ts                # Better Auth instance
+│   │   ├── auth.ts                # Better Auth instance + Drizzle adapter config
 │   │   └── db.ts                  # Drizzle + Bun native SQL instance
 │   ├── db/
-│   │   ├── schema.ts              # Drizzle schema — all tables and enums
+│   │   ├── schema.ts              # Drizzle schema — domain tables, enums, cross-schema relations
+│   │   ├── auth-schema.ts         # GENERATED — Better Auth tables; never hand-edit
 │   │   └── migrations/            # Drizzle-generated SQL (never hand-edit)
 │   ├── test-setup.ts              # Bun test preload — creates paxis_test DB, runs migrations
 │   └── frontend/
@@ -90,6 +93,9 @@ docker compose up
 
 # run tests (same DB service, separate database name)
 DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test
+
+# regenerate Better Auth schema after changing src/lib/auth.ts
+bun run auth:generate
 ```
 
 Copy `.env` and set at minimum `GEMINI_API_KEY`. `BETTER_AUTH_SECRET` defaults to a dev placeholder in compose — override it in `.env` for any auth testing.
@@ -135,6 +141,8 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 - `Bun.env` instead of `process.env`
 - `bun add <pkg>@latest` on the CLI — never write versions in `package.json` by hand
 - Drizzle schema changes via `bun run db:push` only — never hand-edit migration files
+- Better Auth schema changes via `bun run auth:generate` only — never hand-edit `src/db/auth-schema.ts`
+- All API routes are Hono handlers registered in `src/app.ts` or imported route files
 - kebab-case filenames; PascalCase types and React components
 - All agent functions must write to the audit log before returning — no silent failures
 - Document parsing always via Gemini Flash — never attempt to parse PDF/image with text-only models
@@ -150,7 +158,7 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 - **Immutable audit trail** — every agent action is append-only; the audit log is the product
 - **Agent pattern is regulation-agnostic** — intake, classify, measure, track, report, alert applies to any compliance requirement; new modules drop in without re-onboarding
 - **Provider abstraction** — LLM calls never hardcode a provider; `LLM_PROVIDER` env var switches the entire stack
-- **Single process** — `Bun.serve()` serves both HTML routes and API routes; no separate frontend server in production
+- **Single process** — `Bun.serve()` is the process boundary; Hono handles API routing inside it; no separate frontend server in production
 - **No Docker** — single Bun binary, Caddy TLS, Postgres on the same Vultr instance
 
 ---
@@ -158,6 +166,7 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 ## Hard Constraints
 
 - Never modify Drizzle-generated migration files (`src/db/migrations/`)
+- Never hand-edit `src/db/auth-schema.ts` — it is fully managed by Better Auth; run `bun run auth:generate` to regenerate it when the auth config changes
 - Never hardcode API keys, tokens, or secrets anywhere in source
 - Never invoke `node` — Bun only, always
 - Never use `process.env` — use `Bun.env`

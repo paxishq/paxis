@@ -6,6 +6,53 @@ Run `/decision` to add an entry.
 
 ---
 
+## ADR-008: Better Auth CLI Run via `bun` to Avoid jiti/bun-sql Incompatibility
+
+**Date:** 2026-05-14
+**Status:** Accepted
+
+**Context:**
+`bunx auth@latest generate` downloads and runs the Better Auth CLI under Node.js, which uses `jiti` to import our auth config. `jiti` uses Node's CJS module loader, which cannot resolve the native `bun` module required by `drizzle-orm/bun-sql`. The CLI fails with `Cannot find module 'bun'`.
+
+**Options Considered:**
+- `bunx auth@latest generate`: Convenient but runs under Node/jiti — fails for bun-sql projects
+- Write schema manually: Works but diverges from the generated source of truth
+- Install `@better-auth/cli` locally, run via `bun node_modules/.bin/better-auth`: Bun owns all module resolution, including the `bun` native module that jiti would otherwise fail on
+
+**Decision:**
+Install `@better-auth/cli` as a dev dependency. Run it via `bun node_modules/.bin/better-auth generate` — aliased as `bun run auth:generate`. Output goes to `src/db/auth-schema.ts`, which is never hand-edited. `drizzle.config.ts` uses `schema: "./src/db/*.ts"` to pick up both schema files.
+
+**Consequences:**
+- ✅ Generate command works correctly with `drizzle-orm/bun-sql`
+- ✅ `src/db/auth-schema.ts` is always authoritative — no drift from manual edits
+- ⚠️ `@better-auth/cli` must be kept in sync with `better-auth` version
+
+---
+
+## ADR-007: Hono Inside `Bun.serve()` for API Routing
+
+**Date:** 2026-05-14
+**Status:** Accepted
+
+**Context:**
+`Bun.serve()` was chosen as the process boundary (ADR-004) but raw `fetch` handler routing is verbose and untyped. Better Auth's integration story is first-class with framework routers. Hono on Bun is near-zero overhead and provides typed middleware, route composition, and RPC.
+
+**Options Considered:**
+- Raw `Bun.serve()` fetch handler with manual routing: Minimal, but tedious and untyped
+- Full Hono server replacing `Bun.serve()`: Loses the binary compilation and unix socket benefits of `Bun.serve()`
+- Hono mounted inside `Bun.serve()` via `routes`: Keeps `Bun.serve()` as the process boundary; Hono handles all API routing internally
+
+**Decision:**
+`Bun.serve()` remains the entry point. `routes: { "/api/*": app.fetch }` delegates all API traffic to a Hono app (`src/app.ts`). React frontend HTML routes sit alongside in `Bun.serve()`. Better Auth mounts at `/api/auth/*` via `app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw))`.
+
+**Consequences:**
+- ✅ `Bun.serve()` still owns the process — unix socket, port binding, `bun build --compile` all work unchanged
+- ✅ Hono provides typed middleware, session guards, and clean route composition across enterprise/supplier portals
+- ✅ Better Auth integrates naturally via `auth.handler(c.req.raw)`
+- ⚠️ All API routes must live under `/api/*` — bare paths are reserved for HTML routes
+
+---
+
 ## ADR-006: Immutable Audit Log as Core Product
 
 **Date:** 2026-05-14

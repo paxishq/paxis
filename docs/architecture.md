@@ -2,49 +2,50 @@
 
 ## System Overview
 
-Paxis is a two-sided EU compliance OS: enterprises dispatch CSRD questionnaires and generate ESRS reports; suppliers maintain EU AI Act inventory, carbon ledger, and compliance docs for free. A `Bun.serve()` single-process server handles both HTML (React + shadcn/ui) and API routes, backed by PostgreSQL 18 with an immutable append-only audit log. Six specialized AI agents coordinate via the Planner (Gemini 3.1 Pro); all LLM calls route through a provider abstraction switchable via `LLM_PROVIDER`.
+Paxis is a two-sided EU compliance OS: enterprises dispatch CSRD questionnaires and generate ESRS reports; suppliers maintain EU AI Act inventory, carbon ledger, and compliance docs for free. `Bun.serve()` is the process boundary (unix socket, port, binary); it delegates all API traffic to a Hono application via `routes: { "/api/*": app.fetch }`. HTML routes for the React frontends sit alongside in `Bun.serve()`. PostgreSQL 18 backs the system with an immutable append-only audit log. Six specialized AI agents coordinate via the Planner (Gemini 3.1 Pro); all LLM calls route through a provider abstraction switchable via `LLM_PROVIDER`.
 
 ## Component Map
 
 ```
 Browser
-  └── Bun.serve() (unix//run/paxis/app.sock prod / port 15150 dev)
-        ├── HTML routes ──────────── React frontend (enterprise + supplier)
-        └── API routes
-              ├── /auth/*            ← Better Auth (sessions, OAuth)
-              ├── /enterprise/*      ← Enterprise dashboard API
-              └── /supplier/*        ← Supplier portal API
-                    │
-                    └── agents/
-                          ├── planner.ts         (Gemini 3.1 Pro — orchestrator)
-                          │     ├── intake.ts
-                          │     ├── ai-act.ts
-                          │     ├── carbon.ts     (Gemini Flash multimodal)
-                          │     ├── supply-chain.ts
-                          │     ├── risk-deadline.ts
-                          │     └── esrs-report.ts
-                          │
-                          └── lib/
-                                ├── llm.ts        (Gemini | Featherless abstraction)
-                                ├── auth.ts       (Better Auth instance)
-                                └── db.ts ──────── PostgreSQL 18
-                                                      ├── enterprises
-                                                      ├── suppliers
-                                                      ├── questionnaires
-                                                      ├── ai_inventories
-                                                      ├── carbon_entries
-                                                      ├── scope3_aggregates
-                                                      └── audit_log (append-only)
+  └── Bun.serve() (unix:/run/paxis/app.sock prod / port 15150 dev)
+        ├── routes "/api/*" ──── Hono app (src/app.ts)
+        │     ├── /api/auth/*         ← Better Auth handler (auth.handler)
+        │     ├── /api/enterprise/*   ← Enterprise dashboard API
+        │     └── /api/supplier/*     ← Supplier portal API
+        │           │
+        │           └── agents/
+        │                 ├── planner.ts         (Gemini 3.1 Pro — orchestrator)
+        │                 │     ├── intake.ts
+        │                 │     ├── ai-act.ts
+        │                 │     ├── carbon.ts     (Gemini Flash multimodal)
+        │                 │     ├── supply-chain.ts
+        │                 │     ├── risk-deadline.ts
+        │                 │     └── esrs-report.ts
+        │                 │
+        │                 └── lib/
+        │                       ├── llm.ts        (Gemini | Featherless abstraction)
+        │                       ├── auth.ts       (Better Auth instance)
+        │                       └── db.ts ──────── PostgreSQL 18
+        │                                             ├── user / session / account (Better Auth)
+        │                                             ├── enterprises
+        │                                             ├── suppliers
+        │                                             ├── questionnaires
+        │                                             ├── ai_inventories
+        │                                             ├── carbon_entries
+        │                                             ├── scope3_aggregates
+        │                                             └── audit_log (append-only)
+        └── HTML routes ──────── React frontend (enterprise + supplier portals)
 ```
 
 ## Data Flow
 
 A typical enterprise Scope 3 questionnaire dispatch:
 
-1. Enterprise admin POSTs to `/enterprise/questionnaires` — authenticated via Better Auth session
+1. Enterprise admin POSTs to `/api/enterprise/questionnaires` — Hono middleware validates Better Auth session
 2. Intake Agent parses the questionnaire, maps questions to existing supplier data, identifies gaps
 3. Planner Agent determines which supplier nodes need to respond and schedules requests
-4. Suppliers receive questionnaire via portal; respond through `/supplier/*` routes
+4. Suppliers receive questionnaire via portal; respond through `/api/supplier/*` routes
 5. Supply Chain Agent aggregates responses, calculates Scope 3 figure, writes to `scope3_aggregates`
 6. ESRS Report Agent assembles audit-ready output; enterprise downloads PDF
 7. Every agent action writes an append-only record to `audit_log` before returning
@@ -53,10 +54,10 @@ A typical enterprise Scope 3 questionnaire dispatch:
 
 | Package | Responsibility |
 |---------|---------------|
-| `src/index.ts` | `Bun.serve()` entry; registers all routes; unix socket in prod, port 15150 in dev |
-| `src/routes/auth.ts` | Better Auth handler — sessions, OAuth, role assignment |
-| `src/routes/enterprise/` | Questionnaire dispatch, Scope 3 dashboard, ESRS export |
-| `src/routes/supplier/` | Questionnaire responses, AI Act inventory, carbon entries |
+| `src/index.ts` | `Bun.serve()` entry — unix socket (prod) / port 15150 (dev); routes `/api/*` to Hono |
+| `src/app.ts` | Hono application — all API routes, auth handler, session middleware |
+| `src/routes/enterprise/` | Enterprise dashboard API handlers (Hono) |
+| `src/routes/supplier/` | Supplier portal API handlers (Hono) |
 | `src/agents/planner.ts` | Coordinates all agents; maintains shared compliance state; Gemini 3.1 Pro |
 | `src/agents/intake.ts` | Parses questionnaires; maps to existing data; dispatches to suppliers |
 | `src/agents/ai-act.ts` | Discovers AI tools; classifies by EU AI Act risk tier; generates documentation |
@@ -65,9 +66,10 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | `src/agents/risk-deadline.ts` | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
 | `src/agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 | `src/lib/llm.ts` | LLM provider abstraction — Gemini or Featherless via `LLM_PROVIDER` |
-| `src/lib/auth.ts` | Better Auth instance configuration |
+| `src/lib/auth.ts` | Better Auth instance — Drizzle adapter, social providers, custom user fields |
 | `src/lib/db.ts` | Drizzle + Bun native SQL connection; reads `DATABASE_URL`; exports `db` |
-| `src/db/schema.ts` | Drizzle schema: all tables and enums (`pgTable`, `pgEnum`) |
+| `src/db/schema.ts` | Drizzle schema — domain tables, enums, cross-schema relations to `user` |
+| `src/db/auth-schema.ts` | **Generated — do not edit.** Better Auth tables (`user`, `session`, `account`, `verification`) + custom fields (`role`, `enterpriseId`, `supplierId`). Regenerate with `bun run auth:generate`. |
 | `src/frontend/` | React + shadcn/ui apps for enterprise and supplier portals |
 | `infra/main.tf` | OpenTofu: Vultr VM + networking + floating IP |
 | `scripts/` | Cloud-init, idempotent server setup, deploy-key bootstrap |
@@ -77,9 +79,12 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Runtime | Bun | Single binary, TypeScript-native, native Postgres bindings |
-| HTTP + frontend | `Bun.serve()` fullstack | One process for HTML + API routes; no separate frontend server |
+| Process boundary | `Bun.serve()` | Unix socket, port binding, binary compilation — keeps infra simple |
+| API routing | Hono (inside `Bun.serve()`) | Typed middleware, RPC, clean route composition — mounted via `routes: { "/api/*": app.fetch }` |
+| Frontend serving | `Bun.serve()` HTML routes | Static React apps served from the same process; no separate server |
 | Database | PostgreSQL 18 + Drizzle (`drizzle-orm/bun-sql`) | ACID, audit log integrity, Drizzle type safety |
-| Auth | Better Auth | Framework-agnostic; role-based enterprise/supplier access |
+| Auth | Better Auth | Framework-agnostic handler works with Hono; role-based enterprise/supplier access |
+| Auth schema | Generated (`bun run auth:generate`) | `@better-auth/cli` installed locally and run via `bun` to avoid jiti/bun-sql incompatibility |
 | Agent orchestration | Gemini 3.1 Pro (Planner) | Multi-step reasoning for coordinating 6 specialized agents |
 | Document parsing | Gemini 3.1 Flash | Multimodal: invoices, energy bills, questionnaires in multiple languages |
 | LLM abstraction | `src/lib/llm.ts` + `LLM_PROVIDER` env var | Swap providers without touching agent code |
@@ -102,7 +107,7 @@ Full decision records: `docs/decisions.md`
 
 ## Security Considerations
 
-- Auth at middleware boundary — route handlers never contain auth logic
+- Auth at Hono middleware boundary — route handlers never contain auth logic
 - Enterprise/supplier role isolation — enterprise data not accessible from supplier routes
 - Audit log integrity — only agent functions write to `audit_log`; no direct table access from routes
 - Secrets in `/etc/paxis.env` (600, root only) on the server — never in source or logs

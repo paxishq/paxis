@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
     "@biomejs/biome": "^2.4.15",
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
@@ -15,9 +16,12 @@
     "check": "biome check",
     "check:fix": "biome check --write",
     "build": "bun build --compile --target=bun-linux-x64 src/index.ts --outfile=paxis",
-    "db:push": "bunx drizzle-kit push"
+    "db:push": "bunx drizzle-kit push",
+    "auth:generate": "bun node_modules/.bin/better-auth generate --config src/lib/auth.ts --output src/db/auth-schema.ts --yes"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2"
+    "better-auth": "^1.6.11",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.18"
   }
 }
