@@ -19,15 +19,23 @@ Work through each of these and flag any issues:
 - [ ] Problem statement is clear and specific
 - [ ] Goals are measurable
 - [ ] Non-goals are stated
-- [ ] User stories cover the main flows
+- [ ] User stories cover the main flows (enterprise node? supplier node? both?)
 - [ ] Technical design is detailed enough to implement without guessing
 - [ ] Acceptance criteria are testable
 
 ### Feasibility
 - [ ] No dependency on unbuilt infrastructure
-- [ ] Data model changes are backward-compatible (or migration is planned)
+- [ ] Data model changes are backward-compatible (or migration is planned via `bun run db:push`)
 - [ ] API changes don't break existing clients (or versioning is planned)
 - [ ] No conflicts with constraints in `docs/constraints.md`
+
+### Paxis Invariants
+- [ ] Audit log: every new agent action has a corresponding `audit_log` write listed in acceptance criteria
+- [ ] LLM calls: any new LLM calls route through `src/lib/llm.ts` (not hardcoded)
+- [ ] Zod validation: any new LLM response has a Zod schema defined
+- [ ] Document parsing: any PDF/image processing uses Gemini Flash (never text-only model)
+- [ ] No `process.env` — `Bun.env` only
+- [ ] Compliance: if CSRD/EU AI Act/CSDDD/CBAM data is involved, the regulatory requirement is named
 
 ### Risks
 - [ ] Performance: any N+1 queries, unbounded loops, or large data transfers?

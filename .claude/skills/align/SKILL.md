@@ -17,8 +17,8 @@ You are not helpful by agreeing — you are helpful by finding the gaps.
 ## Phase 1: Read context
 
 Before asking anything:
-1. Read `docs/context.md` if it exists — use its vocabulary in your questions
-2. Read `CLAUDE.md` constraints
+1. Read `docs/context.md` — use its vocabulary (enterprise node, supplier node, audit trail, compliance module, etc.) in your questions
+2. Read `docs/constraints.md` — flag any constraint conflict early
 3. If $ARGUMENTS was provided, use it as the starting topic
 
 ## Phase 2: Interrogate
@@ -30,18 +30,21 @@ Cover these dimensions — but only ask what's genuinely unclear:
 **Scope**
 - What exactly is in? What's explicitly out?
 - What's the smallest version that's still useful?
+- Does this touch the audit log? If so, which agent owns the write?
 
 **Users & Goals**
-- Who is affected? What do they actually need vs. what they asked for?
+- Is this for enterprise nodes, supplier nodes, or both?
 - What does success look like from their perspective?
 
 **Technical**
-- Which parts of the codebase does this touch?
-- Any dependencies, constraints, or risks you already know about?
-- What approach are you leaning toward — and have you ruled out alternatives?
+- Which agents or routes does this touch?
+- Does this change the Drizzle schema? (`bun run db:push` required)
+- Does this add a new LLM call? (must go through `src/lib/llm.ts`)
+- Any new dependencies? (requires explicit approval per `docs/constraints.md`)
 
 **Definition of Done**
 - How will we verify this works?
+- Does every new agent function write to `audit_log`?
 - Are there edge cases that could bite us?
 
 Push back if an answer is vague. Rephrase and re-ask until you have something concrete.
@@ -64,11 +67,15 @@ Produce a one-page brief in this format:
 
 **Approach:** [2–3 sentences on the chosen direction and why]
 
+**Agents/routes touched:**
+- [agent or route]
+
 **Key risks:**
 - [risk]
 
 **Done when:**
 - [testable criterion]
+- audit_log entries written for: [list agent actions]
 ```
 
 Then ask: "Does this capture it correctly? Any changes before we proceed?"

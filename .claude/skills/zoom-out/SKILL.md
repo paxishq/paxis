@@ -13,8 +13,8 @@ Stop implementation mode. Shift to understanding mode.
 
 ## What to Do
 
-1. Read `docs/context.md` — use its vocabulary throughout
-2. Read `docs/architecture.md` for the system map
+1. Read `docs/context.md` — use its vocabulary throughout (enterprise node, supplier node, audit trail, etc.)
+2. Read `docs/architecture.md` for the component map and data flow
 3. Examine $ARGUMENTS (the file, module, or concept in question)
 
 Then answer these questions, in order:
@@ -29,9 +29,16 @@ What problem does it solve? What would break without it?
 - What calls into it? From where?
 - What does it call out to? What depends on it?
 - Draw a simple ASCII dependency map if helpful
+- If it's an agent: which other agents does the Planner coordinate it with?
 
 **What are its responsibilities?**
 List them. If there are more than 3–4, flag that — it may be doing too much.
+
+**Paxis invariants to check:**
+- Does it write to `audit_log` on every code path? (Required for all agent functions)
+- Does it route LLM calls through `src/lib/llm.ts`? (Never hardcode provider SDKs)
+- Does it use `Bun.env` not `process.env`?
+- Does it validate LLM output with Zod before using it?
 
 **What are its current pain points?**
 Look for: deep nesting, unclear naming, mixed abstraction levels, hidden dependencies, missing tests, naming that conflicts with `docs/context.md`.

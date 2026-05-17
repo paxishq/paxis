@@ -18,7 +18,7 @@ Use `ask_user_question` to gather what you need. Ask one question at a time.
 
 Required information:
 1. **Problem** — What user problem or business need does this solve?
-2. **Users** — Who is affected? What are their goals?
+2. **Users** — Enterprise nodes, supplier nodes, or both? What are their goals?
 3. **Scope** — What's in? What's explicitly out?
 4. **Constraints** — Deadlines, dependencies, hard requirements?
 5. **Success** — How will we know this is done and working?
@@ -43,6 +43,28 @@ Follow this structure exactly (from `docs/spec.md`):
 - Tasks (break into atomic implementation steps)
 - Open Questions
 - Acceptance Criteria
+
+## Paxis-Specific Checklist
+
+Include in every spec:
+
+**Agents:**
+- Which agents (if any) are involved?
+- Does the Planner need to coordinate a new agent action?
+
+**Audit log:**
+- What new `audit_log` entries will be written, and by which agent?
+- Specs that add agent actions MUST list the audit log writes in Acceptance Criteria
+
+**Schema changes:**
+- Any new Drizzle tables or columns? Note that `bun run db:push` is required after schema changes
+
+**LLM calls:**
+- Any new LLM calls? Must route through `src/lib/llm.ts`
+- What Zod schema validates the response?
+
+**Compliance:**
+- Does this touch CSRD, EU AI Act, CSDDD, or CBAM data? Note which regulation applies
 
 ## Phase 3: Validate
 

@@ -2,9 +2,11 @@
 
 ## Strategy
 
-[TODO: overall approach — unit, integration, E2E and where each applies]
+Unit tests for pure functions and agent logic; integration tests for routes and database queries. No E2E framework yet — the hackathon timeline prioritizes coverage of auth middleware, agent audit-log writes, and Zod validation boundaries.
 
-Core principle: no mocking the database. Tests hit a real Postgres test instance (see `test-setup.ts`).
+Core principle: no mocking the database. Tests hit a real Postgres test instance.
+
+External LLM calls (Gemini, Featherless) are mocked at the `src/lib/llm.ts` abstraction boundary — never in individual agent files.
 
 ## Tools
 
@@ -12,13 +14,14 @@ Core principle: no mocking the database. Tests hit a real Postgres test instance
 |-------|------|-------|
 | Unit / Integration | Bun test runner | Built-in; no Jest needed |
 | Coverage | Bun coverage | 80% threshold in `bunfig.toml` |
-| [TODO] | [TODO] | [TODO] |
+| Type checking | `tsgo` (`bun run typecheck`) | Run before committing |
+| Linting | Biome.js (`bun run check:fix`) | Run before committing |
 
 ## test-setup.ts
 
 Loaded via `bunfig.toml` preload. Runs migrations against the test DB and truncates between tests.
 
-**Critical:** `DATABASE_URL` must contain `"test"` — `test-setup.ts` throws otherwise. Separate `postgres-test` service in `compose.yml` on port 5433.
+**Critical:** `DATABASE_URL` must contain `"test"` — `test-setup.ts` throws otherwise. Separate `postgres-test` service on port 5433.
 
 ## Running Tests
 
@@ -29,11 +32,11 @@ bun test
 # watch mode
 bun test --watch
 
-# single package
-bun test src/[package]
+# single file or directory
+bun test src/agents/carbon
 
-# apply migrations to test DB first (required on first run)
-bunx drizzle-kit migrate
+# apply schema to test DB (required on first run or after schema changes)
+bun run db:push
 ```
 
 ## Conventions
@@ -41,13 +44,17 @@ bunx drizzle-kit migrate
 - Test files co-located with source: `foo.ts` → `foo.test.ts`
 - Use domain language from `docs/context.md` in test descriptions
 - No mocking the database — tests hit the real test Postgres instance
-- [TODO: mocking policy for external services]
+- Mock external LLM calls at `src/lib/llm.ts` — never in individual agent files
+- Agent test names should reference domain objects: `it('writes audit log entry when supplier responds')`
 
 ## What Must Always Be Tested
 
-- Auth middleware — session derivation and rejection
-- [TODO: non-negotiable coverage requirements]
+- Auth middleware — session derivation and rejection for enterprise and supplier roles
+- Every agent function — must write an audit log entry on every code path
+- Zod validation — invalid LLM output must throw before hitting any downstream logic
+- Supply chain aggregation — Scope 3 math must be deterministically tested with known fixtures
+- ESRS report generation — output must match expected ESRS schema structure
 
 ---
 
-*Last updated: [DATE]*
+*Last updated: 2026-05-14*
