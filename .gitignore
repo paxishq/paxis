@@ -2,3 +2,4 @@
 .env
 db_data/
 node_modules
+COMMITS.md
