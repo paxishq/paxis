@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "paxis-supplier": {
+      "type": "http",
+      "url": "http://localhost:15151/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PAXIS_MCP_TOKEN}"
+      }
+    },
     "groundzero": {
       "command": "bunx",
       "args": ["@groundzero/mcp"],

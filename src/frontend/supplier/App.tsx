@@ -4,12 +4,15 @@ import {
   Bot,
   CheckCircle2,
   ClipboardCheck,
+  Copy,
   FileText,
   FileUp,
+  Key,
   Leaf,
   Loader2,
   LogOut,
   Plus,
+  Settings,
   Sparkles,
   Trash2,
   XCircle,
@@ -42,6 +45,7 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
+import { Assistant } from "./components/Assistant";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,8 +102,21 @@ type AiInventory = {
   justification: string | null;
 };
 
-type SupplierPage = "questionnaires" | "carbon" | "ai-inventory" | "compliance";
+type SupplierPage =
+  | "questionnaires"
+  | "carbon"
+  | "ai-inventory"
+  | "compliance"
+  | "settings";
 type AuthState = "loading" | "authed" | "unauthed";
+
+type McpToken = {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1818,6 +1835,215 @@ function AiItemDetailPage({
   );
 }
 
+// ── Settings / MCP Tokens page ───────────────────────────────────────────────
+
+function SettingsPage() {
+  const [tokens, setTokens] = useState<McpToken[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function loadTokens() {
+    fetch("/api/supplier/mcp-tokens")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: McpToken[]) => {
+        setTokens(data);
+        setLoading(false);
+      });
+  }
+
+  useEffect(() => {
+    loadTokens();
+  }, []);
+
+  async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setCreating(true);
+    const res = await fetch("/api/supplier/mcp-tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        id: string;
+        name: string;
+        createdAt: string;
+        token: string;
+      };
+      setNewToken(data.token);
+      setName("");
+      loadTokens();
+    }
+    setCreating(false);
+  }
+
+  async function handleRevoke(id: string) {
+    await fetch(`/api/supplier/mcp-tokens/${id}`, { method: "DELETE" });
+    setTokens((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, revokedAt: new Date().toISOString() } : t,
+      ),
+    );
+  }
+
+  async function handleCopy(text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const activeTokens = tokens.filter((t) => !t.revokedAt);
+  const revokedTokens = tokens.filter((t) => t.revokedAt);
+
+  return (
+    <div>
+      <PageHeader
+        title="Settings"
+        description="Manage MCP tokens for Claude Desktop, Cursor, and other AI agents"
+      />
+
+      {/* New token alert */}
+      {newToken && (
+        <div className="mb-5 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3.5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-medium text-emerald-400 mb-1">
+                Token created — copy it now, it won't be shown again
+              </p>
+              <p className="font-mono text-[11px] text-zinc-300 break-all">
+                {newToken}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleCopy(newToken)}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/50 border border-emerald-800/50 rounded px-2.5 py-1 transition-colors"
+              >
+                <Copy className="size-3" />
+                {copied ? "Copied!" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewToken(null)}
+                className="text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                <XCircle className="size-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create token form */}
+      <div className="mb-6 rounded-lg border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+        <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">
+          Create token
+        </p>
+        <form onSubmit={handleCreate} className="flex items-center gap-2">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Token name, e.g. Claude Desktop"
+            className="h-8 text-sm flex-1"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!name.trim() || creating}
+            className="h-8 text-[13px] gap-1.5 shrink-0"
+          >
+            <Plus className="size-3.5" />
+            {creating ? "Creating…" : "Create"}
+          </Button>
+        </form>
+        <p className="text-[11px] text-zinc-700 mt-2 leading-relaxed">
+          Use the token as{" "}
+          <code className="font-mono text-zinc-500">
+            Authorization: Bearer &lt;token&gt;
+          </code>{" "}
+          when connecting to{" "}
+          <code className="font-mono text-zinc-500">
+            http://localhost:15151/mcp
+          </code>
+          .
+        </p>
+      </div>
+
+      {/* Active tokens */}
+      <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">
+        Active tokens
+      </p>
+      {loading ? (
+        <p className="text-[13px] text-zinc-600 py-4">Loading…</p>
+      ) : activeTokens.length === 0 ? (
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] px-5 py-6 flex flex-col items-center gap-2">
+          <Key className="size-6 text-zinc-700" />
+          <p className="text-[13px] text-zinc-500">No active tokens</p>
+          <p className="text-[12px] text-zinc-700">
+            Create a token above to connect Claude Desktop or other MCP clients.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] divide-y divide-white/[0.04] mb-5">
+          {activeTokens.map((t) => (
+            <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+              <Key className="size-3.5 text-emerald-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-zinc-200">
+                  {t.name}
+                </p>
+                <p className="text-[11px] text-zinc-600 mt-0.5">
+                  Created {formatDate(t.createdAt)}
+                  {t.lastUsedAt && ` · Last used ${formatDate(t.lastUsedAt)}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRevoke(t.id)}
+                className="text-[11px] font-medium text-red-500 hover:text-red-400 bg-red-950/30 hover:bg-red-950/50 border border-red-900/40 rounded px-2 py-1 transition-all"
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Revoked tokens */}
+      {revokedTokens.length > 0 && (
+        <>
+          <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">
+            Revoked
+          </p>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.01] divide-y divide-white/[0.03]">
+            {revokedTokens.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 px-4 py-2.5 opacity-50"
+              >
+                <Key className="size-3.5 text-zinc-700 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-zinc-500 line-through">
+                    {t.name}
+                  </p>
+                  <p className="text-[10px] text-zinc-700">
+                    Revoked {formatDate(t.revokedAt)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function SupplierApp() {
@@ -1937,6 +2163,13 @@ export default function SupplierApp() {
           >
             <ClipboardCheck className="size-3.5" />
             Compliance
+          </NavBtn>
+          <NavBtn
+            active={page === "settings"}
+            onClick={() => navigate("settings")}
+          >
+            <Settings className="size-3.5" />
+            Settings
           </NavBtn>
         </nav>
         <div className="ml-auto flex items-center gap-3">
@@ -2208,7 +2441,20 @@ export default function SupplierApp() {
               />
             );
           })()}
+
+        {/* ── Settings ── */}
+        {page === "settings" && <SettingsPage />}
       </main>
+
+      {/* Floating AI assistant — visible on all pages */}
+      <Assistant
+        page={page}
+        context={
+          selectedQuestionnaireId
+            ? { questionnaireId: selectedQuestionnaireId }
+            : undefined
+        }
+      />
     </div>
   );
 }

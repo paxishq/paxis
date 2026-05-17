@@ -1,6 +1,7 @@
 import app from "./app";
 import enterpriseApp from "./frontend/enterprise/App.html";
 import supplierApp from "./frontend/supplier/App.html";
+import { startMcpServer } from "./mcp/server";
 
 const isProd = Bun.env.NODE_ENV === "production";
 
@@ -15,3 +16,5 @@ Bun.serve({
     "/*": enterpriseApp,
   },
 });
+
+startMcpServer();

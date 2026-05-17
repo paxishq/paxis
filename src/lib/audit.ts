@@ -8,7 +8,8 @@ export type AgentName =
   | "carbon"
   | "supply-chain"
   | "risk-deadline"
-  | "esrs-report";
+  | "esrs-report"
+  | "mcp";
 
 export interface AuditEntry {
   agentName: AgentName;

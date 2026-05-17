@@ -38,6 +38,7 @@ export const agentNameEnum = pgEnum("agent_name", [
   "supply-chain",
   "risk-deadline",
   "esrs-report",
+  "mcp",
 ]);
 
 export const emissionsScopeEnum = pgEnum("emissions_scope", [
@@ -76,6 +77,26 @@ export const suppliers = pgTable("suppliers", {
     .notNull(),
 });
 
+// ── MCP Tokens ───────────────────────────────────────────────────────────────
+
+export const mcpTokens = pgTable(
+  "mcp_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    name: text("name").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("mcp_tokens_supplier_idx").on(t.supplierId)],
+);
+
 // ── Enterprise ↔ Supplier relationships ─────────────────────────────────────
 
 export const enterpriseSuppliers = pgTable(
@@ -110,6 +131,7 @@ export const enterpriseRelations = relations(enterprises, ({ many }) => ({
 export const supplierRelations = relations(suppliers, ({ many }) => ({
   users: many(user),
   enterprises: many(enterpriseSuppliers),
+  mcpTokens: many(mcpTokens),
 }));
 
 export const enterpriseSuppliersRelations = relations(

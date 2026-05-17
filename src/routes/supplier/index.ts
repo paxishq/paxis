@@ -5,7 +5,9 @@ import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 import { requireAuth, requireSupplier } from "../../middleware/session";
 import aiInventoryRoutes from "./ai-inventory";
+import assistantRoutes from "./assistant";
 import carbonRoutes from "./carbon";
+import mcpTokenRoutes from "./mcp-tokens";
 import questionnaireRoutes from "./questionnaires";
 
 const supplier = new Hono<{ Variables: AuthVariables }>();
@@ -30,5 +32,7 @@ supplier.get("/me", async (c) => {
 supplier.route("/questionnaires", questionnaireRoutes);
 supplier.route("/ai-inventory", aiInventoryRoutes);
 supplier.route("/carbon", carbonRoutes);
+supplier.route("/mcp-tokens", mcpTokenRoutes);
+supplier.route("/assistant", assistantRoutes);
 
 export default supplier;
