@@ -13,11 +13,6 @@ export const auth = betterAuth({
 			clientId: Bun.env.GOOGLE_CLIENT_ID!,
 			clientSecret: Bun.env.GOOGLE_CLIENT_SECRET!,
 		},
-		microsoft: {
-			clientId: Bun.env.MICROSOFT_CLIENT_ID!,
-			clientSecret: Bun.env.MICROSOFT_CLIENT_SECRET!,
-			tenantId: Bun.env.MICROSOFT_TENANT_ID,
-		},
 	},
 	user: {
 		additionalFields: {
