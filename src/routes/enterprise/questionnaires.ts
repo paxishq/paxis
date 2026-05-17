@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { runPlan } from "../../agents/planner";
 import { db } from "../../lib/db";
 import {
 	enterpriseSuppliers,
@@ -139,7 +140,12 @@ router.post("/:id/send", async (c) => {
 		.where(eq(questionnaires.id, questionnaire.id))
 		.returning();
 
-	// TODO: trigger Intake Agent
+	runPlan({
+		type: "questionnaire_dispatched",
+		questionnaireId: questionnaire.id,
+		enterpriseId: questionnaire.enterpriseId,
+		supplierId: questionnaire.supplierId,
+	}).catch(console.error);
 
 	return c.json(updated);
 });

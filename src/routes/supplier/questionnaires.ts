@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { runPlan } from "../../agents/planner";
 import { db } from "../../lib/db";
 import { questionnaireResponses, questionnaires } from "../../db/schema";
 import type { AuthVariables } from "../../middleware/session";
@@ -128,7 +129,15 @@ router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
 			.where(eq(questionnaires.id, questionnaire.id));
 	}
 
-	// TODO: notify Supply Chain Agent
+	if (body.submit && response) {
+		runPlan({
+			type: "questionnaire_responded",
+			questionnaireId: questionnaire.id,
+			responseId: response.id,
+			enterpriseId: questionnaire.enterpriseId,
+			supplierId: questionnaire.supplierId,
+		}).catch(console.error);
+	}
 
 	return c.json(response);
 });
