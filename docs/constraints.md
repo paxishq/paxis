@@ -33,6 +33,7 @@ Hard constraints for this codebase. Must be respected unconditionally.
 - Generate Better Auth schema (`bunx auth@latest generate`) before first migration
 - Run `bun run check:fix` (Biome) before committing
 - Run `bun run typecheck` (`tsgo`) before committing
+- Use Conventional Commits format — commitlint enforces this on the `commit-msg` hook
 - Write to the audit log in every agent function before returning
 - Validate all LLM responses with Zod at the point of parsing
 - Keep `docs/llm.md` factual and concise — procedures go in `.claude/skills/`

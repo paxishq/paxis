@@ -28,6 +28,7 @@
 | Document intelligence | Gemini 3.1 Flash | Multimodal: invoices, energy bills, questionnaires (IT/DE/FR/EN) |
 | LLM fallback | Featherless.ai | OpenAI-compatible; switched via `LLM_PROVIDER=featherless` |
 | Formatting | Biome.js | Replaces ESLint + Prettier; `bun run check:fix` |
+| Commit linting | commitlint + husky | Enforces Conventional Commits on `commit-msg` hook |
 | IaC | OpenTofu | Official Vultr provider; native KMS state encryption |
 | Infra | Vultr VX1 | Ubuntu 26.04 LTS; Caddy TLS (DNS-01/Cloudflare); no Docker |
 
@@ -104,6 +105,7 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 
 - TypeScript — `tsgo` for type-checking; `bun run typecheck`
 - Biome.js for all formatting and linting — no ESLint, no Prettier; `bun run check:fix`
+- Conventional Commits enforced by commitlint — `<type>(<scope>): <description>` format required
 - ESM imports everywhere; no `.ts` extension in import paths; no CommonJS
 - Bun only — never invoke `node` for any purpose; use `bun -e` instead
 - `Bun.env` instead of `process.env`
