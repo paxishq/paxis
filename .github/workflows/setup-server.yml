@@ -1,0 +1,44 @@
+name: Setup Server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/setup.sh"
+      - "scripts/paxis.service"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VULTR_INSTANCE_IP }}" >> ~/.ssh/known_hosts
+
+      - name: Copy setup scripts to server
+        run: |
+          ssh -i ~/.ssh/id_ed25519 paxis@${{ secrets.VULTR_INSTANCE_IP }} "mkdir -p ~/scripts"
+          scp -i ~/.ssh/id_ed25519 \
+            scripts/setup.sh \
+            scripts/paxis.service \
+            paxis@${{ secrets.VULTR_INSTANCE_IP }}:~/scripts/
+
+      - name: Run setup
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FEATHERLESS_API_KEY: ${{ secrets.FEATHERLESS_API_KEY }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 paxis@${{ secrets.VULTR_INSTANCE_IP }} \
+            "CF_API_TOKEN='${CF_API_TOKEN}' \
+             BETTER_AUTH_SECRET='${BETTER_AUTH_SECRET}' \
+             GEMINI_API_KEY='${GEMINI_API_KEY}' \
+             FEATHERLESS_API_KEY='${FEATHERLESS_API_KEY}' \
+             sudo -E bash ~/scripts/setup.sh"

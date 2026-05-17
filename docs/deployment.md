@@ -45,9 +45,26 @@ tofu output instance_ip
 
 ## First Deploy
 
-Push to `main` — GitHub Actions handles it via `scripts/paxis-setup.sh` (idempotent).
+**One-time manual step:** run `scripts/paxis-deploy-key.sh` as the `paxis` user to register the GitHub deploy key.
 
-Required GitHub Actions secrets: `SERVER_SSH_KEY`, `VULTR_INSTANCE_IP`, `CF_API_TOKEN`.
+Then trigger `setup-server.yml` (manually via `workflow_dispatch` or push a change to `scripts/`) — it runs `setup.sh` over SSH with all required secrets.
+
+After setup completes, push any app code to `main` — `deploy.yml` builds the binary and deploys it.
+
+**Schema migrations are manual:** `ssh paxis@getpaxis.com` then `bun run db:push` (drizzle-kit is not included in the compiled binary).
+
+## GitHub Actions Secrets
+
+Set all of these in **Settings → Secrets → Actions** before running any workflow:
+
+| Secret | Required by | Description |
+|--------|------------|-------------|
+| `SERVER_SSH_KEY` | both workflows | Ed25519 private key with access to the `paxis` user |
+| `VULTR_INSTANCE_IP` | both workflows | Server IP address |
+| `CF_API_TOKEN` | `setup-server.yml` | Cloudflare API token for Caddy DNS-01 challenge |
+| `BETTER_AUTH_SECRET` | `setup-server.yml` | Secret for signing auth sessions (generate with `openssl rand -base64 32`) |
+| `GEMINI_API_KEY` | `setup-server.yml` | Google AI Studio API key |
+| `FEATHERLESS_API_KEY` | `setup-server.yml` | Featherless.ai API key (optional fallback) |
 
 ## Connect to Server
 
@@ -58,12 +75,20 @@ ssh paxis@getpaxis.com
 
 ## Deploy Process
 
-```bash
-# build binary
-bun build --compile --target=bun src/index.ts --outfile=paxis
+`deploy.yml` runs on every push to `main` (excluding docs/infra/scripts changes):
 
-# deploy via GitHub Actions on push to main
-# workflow calls scripts/paxis-setup.sh over SSH
+1. `bun install --frozen-lockfile`
+2. `bun run typecheck` + `bun run check`
+3. `bun build --compile --target=bun-linux-x64 src/index.ts --outfile=paxis`
+4. `scp` binary to `/home/paxis/app/paxis`
+5. `sudo systemctl restart paxis`
+6. `GET /health` smoke test
+
+To deploy manually:
+```bash
+bun build --compile --target=bun-linux-x64 src/index.ts --outfile=paxis
+scp paxis paxis@getpaxis.com:~/app/paxis
+ssh paxis@getpaxis.com "chmod +x ~/app/paxis && sudo systemctl restart paxis"
 ```
 
 ## Environment Variables

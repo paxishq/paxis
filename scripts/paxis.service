@@ -1,0 +1,19 @@
+[Unit]
+Description=Paxis EU Compliance OS
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=paxis
+WorkingDirectory=/home/paxis/app
+EnvironmentFile=/etc/paxis.env
+ExecStart=/home/paxis/app/paxis
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=paxis
+
+[Install]
+WantedBy=multi-user.target

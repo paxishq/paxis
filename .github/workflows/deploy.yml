@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "scripts/**"
+      - "infra/**"
+      - "docs/**"
+      - "*.md"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run check
+
+      - name: Build binary
+        run: bun build --compile --target=bun-linux-x64 src/index.ts --outfile=paxis
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VULTR_INSTANCE_IP }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy binary
+        run: |
+          scp -i ~/.ssh/id_ed25519 paxis paxis@${{ secrets.VULTR_INSTANCE_IP }}:~/app/paxis
+          ssh -i ~/.ssh/id_ed25519 paxis@${{ secrets.VULTR_INSTANCE_IP }} \
+            "chmod +x ~/app/paxis && sudo systemctl restart paxis"
+
+      - name: Health check
+        run: |
+          sleep 3
+          curl --fail --silent https://getpaxis.com/health | grep '"status":"ok"'
