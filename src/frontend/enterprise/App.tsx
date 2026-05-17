@@ -58,6 +58,15 @@ type Questionnaire = {
 type EnterprisePage = "overview" | "suppliers" | "questionnaires";
 type AuthState = "loading" | "authed" | "unauthed";
 
+type Scope3Aggregate = {
+	id: string;
+	reportingYear: number;
+	co2Tonnes: number;
+	supplierCount: number;
+	completionRate: number;
+	calculatedAt: string;
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_QUESTIONS: Question[] = [
@@ -480,10 +489,12 @@ function OverviewPage({
 	enterprise,
 	suppliers,
 	questionnaires,
+	scope3,
 }: {
 	enterprise: Enterprise | null;
 	suppliers: Supplier[];
 	questionnaires: Questionnaire[];
+	scope3: Scope3Aggregate | null;
 }) {
 	const sent = questionnaires.filter((q) => q.status !== "draft").length;
 	const completed = questionnaires.filter((q) => q.status === "completed").length;
@@ -495,16 +506,21 @@ function OverviewPage({
 		{ n: "04", label: "Collect responses",     done: completed > 0 },
 	];
 
+	const scope3Display = scope3
+		? scope3.co2Tonnes.toLocaleString("en-GB", { maximumFractionDigits: 1 })
+		: "—";
+
 	return (
 		<div>
 			<PageHeader
 				title="Overview"
 				description={`Reporting year ${enterprise?.reportingYear ?? "—"}`}
 			/>
-			<div className="grid grid-cols-3 gap-3 mb-8">
+			<div className="grid grid-cols-4 gap-3 mb-8">
 				<StatCard label="Reporting year" value={enterprise?.reportingYear ?? "—"} />
 				<StatCard label="Suppliers" value={suppliers.length} />
 				<StatCard label="Responses" value={completed} sub={`/ ${sent}`} />
+				<StatCard label="Scope 3 tCO₂e" value={scope3Display} />
 			</div>
 
 			<div className="rounded-lg border border-white/[0.05] bg-white/[0.015] p-5">
@@ -670,6 +686,7 @@ export default function EnterpriseApp() {
 	const [enterprise, setEnterprise] = useState<Enterprise | null>(null);
 	const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 	const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
+	const [scope3, setScope3] = useState<Scope3Aggregate | null>(null);
 	const [sending, setSending] = useState<string | null>(null);
 	const [page, setPage] = useState<EnterprisePage>("overview");
 
@@ -682,6 +699,9 @@ export default function EnterpriseApp() {
 		});
 		fetch("/api/enterprise/suppliers").then((r) => r.ok ? r.json() : []).then(setSuppliers);
 		fetch("/api/enterprise/questionnaires").then((r) => r.ok ? r.json() : []).then(setQuestionnaires);
+		fetch("/api/enterprise/scope3").then((r) => r.ok ? r.json() : []).then((rows: Scope3Aggregate[]) => {
+			if (rows.length > 0) setScope3(rows[0] ?? null);
+		});
 	}, []);
 
 	async function signOut() {
@@ -769,6 +789,7 @@ export default function EnterpriseApp() {
 						enterprise={enterprise}
 						suppliers={suppliers}
 						questionnaires={questionnaires}
+						scope3={scope3}
 					/>
 				)}
 				{page === "suppliers" && (
