@@ -44,6 +44,43 @@ enterprise.get("/scope3", async (c) => {
 	return c.json(rows);
 });
 
+// ── Risk & Deadline ───────────────────────────────────────────────────────────
+
+enterprise.post("/risk/assess", async (c) => {
+	const user = c.get("user")!;
+	if (!user.enterpriseId)
+		return c.json({ error: "Not linked to an enterprise" }, 403);
+
+	const { runRiskDeadline } = await import("../../agents/risk-deadline");
+	runRiskDeadline({}, { enterpriseId: user.enterpriseId }).catch(console.error);
+
+	return c.json({ status: "assessing" }, 202);
+});
+
+enterprise.get("/risk/latest", async (c) => {
+	const user = c.get("user")!;
+	if (!user.enterpriseId)
+		return c.json({ error: "Not linked to an enterprise" }, 403);
+
+	const [entry] = await db
+		.select()
+		.from(auditLog)
+		.where(
+			and(
+				eq(auditLog.enterpriseId, user.enterpriseId),
+				eq(auditLog.agentName, "risk-deadline"),
+				eq(auditLog.action, "risk_deadline_assessed"),
+			),
+		)
+		.orderBy(desc(auditLog.createdAt))
+		.limit(1);
+
+	if (!entry) return c.json({ error: "No assessment yet" }, 404);
+
+	const payload = entry.payload as { [k: string]: unknown };
+	return c.json({ assessedAt: entry.createdAt, ...payload });
+});
+
 // ── ESRS Report ───────────────────────────────────────────────────────────────
 
 enterprise.post("/reports/esrs", async (c) => {

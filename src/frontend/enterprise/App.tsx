@@ -68,6 +68,21 @@ type QuestionnaireResponse = {
 
 type QuestionnaireDetail = Questionnaire & { responses: QuestionnaireResponse[] };
 
+type RiskFlag = {
+	type: "deadline" | "data_gap" | "threshold_breach" | "compliance";
+	severity: "critical" | "high" | "medium" | "low";
+	description: string;
+	recommendation: string;
+};
+
+type RiskAssessment = {
+	assessedAt: string;
+	overallRisk: "critical" | "high" | "medium" | "low";
+	summary: string;
+	flags: RiskFlag[];
+	estimatedFilingReadiness: number;
+};
+
 type EsrsReport = {
 	generatedAt: string;
 	report: {
@@ -530,11 +545,17 @@ function OverviewPage({
 	suppliers,
 	questionnaires,
 	scope3,
+	risk,
+	riskAssessing,
+	onAssess,
 }: {
 	enterprise: Enterprise | null;
 	suppliers: Supplier[];
 	questionnaires: Questionnaire[];
 	scope3: Scope3Aggregate | null;
+	risk: RiskAssessment | null;
+	riskAssessing: boolean;
+	onAssess: () => void;
 }) {
 	const sent = questionnaires.filter((q) => q.status !== "draft").length;
 	const completed = questionnaires.filter((q) => q.status === "completed").length;
@@ -563,7 +584,7 @@ function OverviewPage({
 				<StatCard label="Scope 3 tCO₂e" value={scope3Display} />
 			</div>
 
-			<div className="rounded-lg border border-white/[0.05] bg-white/[0.015] p-5">
+			<div className="rounded-lg border border-white/[0.05] bg-white/[0.015] p-5 mb-4">
 				<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-5">
 					Getting started
 				</p>
@@ -591,6 +612,8 @@ function OverviewPage({
 					))}
 				</div>
 			</div>
+
+			<RiskPanel risk={risk} assessing={riskAssessing} onAssess={onAssess} />
 		</div>
 	);
 }
@@ -726,6 +749,132 @@ function QuestionnairesPage({
 						))}
 					</tbody>
 				</table>
+			)}
+		</div>
+	);
+}
+
+// ── Risk panel ────────────────────────────────────────────────────────────────
+
+const RISK_CFG = {
+	critical: { label: "Critical",  color: "text-red-400",     bg: "bg-red-950/50 border-red-900/50",       bar: "bg-red-500" },
+	high:     { label: "High risk", color: "text-orange-400",  bg: "bg-orange-950/50 border-orange-900/50", bar: "bg-orange-500" },
+	medium:   { label: "Medium",    color: "text-amber-400",   bg: "bg-amber-950/50 border-amber-900/50",   bar: "bg-amber-500" },
+	low:      { label: "Low risk",  color: "text-emerald-400", bg: "bg-emerald-950/50 border-emerald-900/50", bar: "bg-emerald-500" },
+};
+
+const FLAG_TYPE_LABEL: Record<RiskFlag["type"], string> = {
+	deadline:          "Deadline",
+	data_gap:          "Data gap",
+	threshold_breach:  "Threshold",
+	compliance:        "Compliance",
+};
+
+function RiskPanel({
+	risk,
+	assessing,
+	onAssess,
+}: {
+	risk: RiskAssessment | null;
+	assessing: boolean;
+	onAssess: () => void;
+}) {
+	const assessBtn = (
+		<button
+			type="button"
+			onClick={onAssess}
+			disabled={assessing}
+			className="inline-flex items-center gap-1.5 text-[12px] font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] rounded px-3 py-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+		>
+			{assessing ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+			{assessing ? "Assessing…" : (risk ? "Re-assess" : "Run assessment")}
+		</button>
+	);
+
+	if (!risk) {
+		return (
+			<div className="rounded-lg border border-white/[0.05] bg-white/[0.015] p-5">
+				<div className="flex items-center justify-between mb-3">
+					<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em]">Risk &amp; deadlines</p>
+					{assessBtn}
+				</div>
+				{assessing ? (
+					<div className="flex items-center gap-2.5 text-[12px] text-zinc-500 py-3">
+						<Loader2 className="size-3.5 animate-spin text-amber-500 shrink-0" />
+						Gemini is reviewing your compliance data…
+					</div>
+				) : (
+					<p className="text-[12px] text-zinc-600 py-2">
+						Run an AI risk assessment to surface CSRD deadlines, data gaps, and filing readiness.
+					</p>
+				)}
+			</div>
+		);
+	}
+
+	const cfg = RISK_CFG[risk.overallRisk];
+
+	return (
+		<div className="rounded-lg border border-white/[0.05] bg-white/[0.015] p-5">
+			<div className="flex items-center justify-between mb-4">
+				<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em]">Risk &amp; deadlines</p>
+				<div className="flex items-center gap-3">
+					{assessing && (
+						<div className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+							<Loader2 className="size-3 animate-spin" />
+							Updating…
+						</div>
+					)}
+					<span className="text-[10px] text-zinc-700 font-mono">{formatDate(risk.assessedAt)}</span>
+					{assessBtn}
+				</div>
+			</div>
+
+			{/* Summary row */}
+			<div className="flex items-start gap-4 mb-4">
+				<div className="flex-1 min-w-0">
+					<p className="text-[12px] text-zinc-400 leading-relaxed">{risk.summary}</p>
+				</div>
+				<div className="shrink-0 flex flex-col items-end gap-2">
+					<span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-medium ${cfg.bg} ${cfg.color}`}>
+						{cfg.label}
+					</span>
+				</div>
+			</div>
+
+			{/* Filing readiness bar */}
+			<div className="mb-4">
+				<div className="flex items-center justify-between mb-1.5">
+					<span className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em]">Filing readiness</span>
+					<span className={`text-[12px] font-mono font-medium ${cfg.color}`}>{risk.estimatedFilingReadiness}%</span>
+				</div>
+				<div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+					<div
+						className={`h-full rounded-full transition-all ${cfg.bar}`}
+						style={{ width: `${risk.estimatedFilingReadiness}%` }}
+					/>
+				</div>
+			</div>
+
+			{/* Flags */}
+			{risk.flags.length > 0 && (
+				<div className="space-y-1.5">
+					{risk.flags.map((flag, i) => {
+						const flagCfg = RISK_CFG[flag.severity];
+						return (
+							<div key={i} className="rounded-md border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
+								<div className="flex items-center gap-2 mb-1">
+									<span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${flagCfg.bg} ${flagCfg.color}`}>
+										{FLAG_TYPE_LABEL[flag.type]}
+									</span>
+									<span className={`text-[10px] font-medium ${flagCfg.color}`}>{flagCfg.label}</span>
+								</div>
+								<p className="text-[12px] text-zinc-300 leading-relaxed">{flag.description}</p>
+								<p className="text-[11px] text-zinc-600 mt-1 leading-relaxed">→ {flag.recommendation}</p>
+							</div>
+						);
+					})}
+				</div>
 			)}
 		</div>
 	);
@@ -1236,12 +1385,15 @@ export default function EnterpriseApp() {
 	const [scope3, setScope3] = useState<Scope3Aggregate | null>(null);
 	const [esrsReport, setEsrsReport] = useState<EsrsReport | null>(null);
 	const [esrsGenerating, setEsrsGenerating] = useState(false);
+	const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
+	const [riskAssessing, setRiskAssessing] = useState(false);
 	const [sending, setSending] = useState<string | null>(null);
 	const [page, setPage] = useState<EnterprisePage>("overview");
 	const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<string | null>(null);
 	const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 	const [detailRefreshKey, setDetailRefreshKey] = useState(0);
 	const esrsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const riskPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	function navigate(p: EnterprisePage) {
 		setPage(p);
@@ -1264,8 +1416,12 @@ export default function EnterpriseApp() {
 		fetch("/api/enterprise/reports/esrs/latest").then((r) => r.ok ? r.json() : null).then((data) => {
 			if (data) setEsrsReport(data as EsrsReport);
 		});
+		fetch("/api/enterprise/risk/latest").then((r) => r.ok ? r.json() : null).then((data) => {
+			if (data) setRiskAssessment(data as RiskAssessment);
+		});
 		return () => {
 			if (esrsPollRef.current) clearInterval(esrsPollRef.current);
+			if (riskPollRef.current) clearInterval(riskPollRef.current);
 		};
 	}, []);
 
@@ -1302,6 +1458,24 @@ export default function EnterpriseApp() {
 				if (esrsPollRef.current) clearInterval(esrsPollRef.current);
 			}
 		}, 4000);
+	}
+
+	async function assessRisk() {
+		if (riskAssessing) return;
+		setRiskAssessing(true);
+		const triggeredAt = new Date().toISOString();
+		await fetch("/api/enterprise/risk/assess", { method: "POST" });
+		if (riskPollRef.current) clearInterval(riskPollRef.current);
+		riskPollRef.current = setInterval(async () => {
+			const r = await fetch("/api/enterprise/risk/latest");
+			if (!r.ok) return;
+			const data = await r.json() as RiskAssessment;
+			if (data.assessedAt > triggeredAt) {
+				setRiskAssessment(data);
+				setRiskAssessing(false);
+				if (riskPollRef.current) clearInterval(riskPollRef.current);
+			}
+		}, 2000);
 	}
 
 	async function sendQuestionnaire(id: string) {
@@ -1382,6 +1556,9 @@ export default function EnterpriseApp() {
 						suppliers={suppliers}
 						questionnaires={questionnaires}
 						scope3={scope3}
+						risk={riskAssessment}
+						riskAssessing={riskAssessing}
+						onAssess={assessRisk}
 					/>
 				)}
 				{page === "suppliers" && !selectedSupplierId && (
