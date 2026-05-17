@@ -22,7 +22,7 @@ Hard constraints for this codebase. Must be respected unconditionally.
 - Do not invoke `node` for any purpose — Bun only, always
 - Do not use `process.env` — use `Bun.env`
 - Do not write package versions in `package.json` by hand — `bun add <pkg>@latest` on the CLI
-- Do not use the `pg` package — use `drizzle-orm/postgres-js`
+- Do not use the `pg` or `postgres` packages — use `drizzle-orm/bun-sql` (Bun native SQL)
 - Do not hardcode API keys, tokens, or secrets anywhere in source
 - Do not send raw PDF/image bytes to text-only LLMs — document parsing always via Gemini Flash
 - Do not use raw LLM output without Zod validation — validate at the boundary

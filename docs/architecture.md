@@ -66,7 +66,7 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | `src/agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 | `src/lib/llm.ts` | LLM provider abstraction — Gemini or Featherless via `LLM_PROVIDER` |
 | `src/lib/auth.ts` | Better Auth instance configuration |
-| `src/lib/db.ts` | Drizzle + postgres-js connection; exports `db` |
+| `src/lib/db.ts` | Drizzle + Bun native SQL connection; exports `db` |
 | `src/db/schema.ts` | Drizzle schema: all tables |
 | `src/frontend/` | React + shadcn/ui apps for enterprise and supplier portals |
 | `infra/main.tf` | OpenTofu: Vultr VM + networking + floating IP |
@@ -78,7 +78,7 @@ A typical enterprise Scope 3 questionnaire dispatch:
 |----------|--------|-----------|
 | Runtime | Bun | Single binary, TypeScript-native, native Postgres bindings |
 | HTTP + frontend | `Bun.serve()` fullstack | One process for HTML + API routes; no separate frontend server |
-| Database | PostgreSQL 18 + Drizzle (`drizzle-orm/postgres-js`) | ACID, audit log integrity, Drizzle type safety |
+| Database | PostgreSQL 18 + Drizzle (`drizzle-orm/bun-sql`) | ACID, audit log integrity, Drizzle type safety |
 | Auth | Better Auth | Framework-agnostic; role-based enterprise/supplier access |
 | Agent orchestration | Gemini 3.1 Pro (Planner) | Multi-step reasoning for coordinating 6 specialized agents |
 | Document parsing | Gemini 3.1 Flash | Multimodal: invoices, energy bills, questionnaires in multiple languages |

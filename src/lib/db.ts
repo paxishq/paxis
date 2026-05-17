@@ -1,13 +1,3 @@
-import postgres from "postgres";
+import { drizzle } from "drizzle-orm/bun-sql";
 
-const isProd = Bun.env.NODE_ENV === "production";
-
-// prod: unix socket — peer auth, no password needed
-// dev:  DATABASE_URL from compose.yml / .env
-const client = postgres(
-	isProd
-		? "postgres:///paxis?host=/var/run/postgresql"
-		: (Bun.env.DATABASE_URL ?? "postgres://paxis:paxis@localhost:15151/paxis"),
-);
-
-export const db = client;
+export const db = drizzle(Bun.env.DATABASE_URL!);

@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*", "commitlint.config.ts"]
+  "include": ["src/**/*", "commitlint.config.ts", "drizzle.config.ts"]
 }

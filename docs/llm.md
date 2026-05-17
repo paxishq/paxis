@@ -22,7 +22,7 @@
 | Runtime | Bun | Bun only — never `node`; `Bun.env` not `process.env` |
 | Framework | Bun fullstack | `Bun.serve()` — HTML routes + API routes in one process |
 | Frontend | React + shadcn/ui | `bun init --react=shadcn`; Tailwind |
-| Database | PostgreSQL 18 | Drizzle ORM (`drizzle-orm/postgres-js`); immutable audit log |
+| Database | PostgreSQL 18 | Drizzle ORM (`drizzle-orm/bun-sql`); immutable audit log |
 | Auth | Better Auth | Role-based: enterprise admin vs supplier node; session audit hooks |
 | Agent orchestration | Gemini 3.1 Pro | Multi-step reasoning; async background workflows; Planner Agent |
 | Document intelligence | Gemini 3.1 Flash | Multimodal: invoices, energy bills, questionnaires (IT/DE/FR/EN) |
@@ -55,7 +55,7 @@
 │   ├── lib/
 │   │   ├── llm.ts                 # LLM provider abstraction (Gemini | Featherless)
 │   │   ├── auth.ts                # Better Auth instance
-│   │   └── db.ts                  # Drizzle + postgres-js instance
+│   │   └── db.ts                  # Drizzle + Bun native SQL instance
 │   ├── db/
 │   │   ├── schema.ts              # Drizzle schema
 │   │   └── migrations/            # Drizzle-generated SQL (never hand-edit)
