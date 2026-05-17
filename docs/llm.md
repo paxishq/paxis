@@ -55,10 +55,21 @@
 │   │   │   ├── suppliers.ts       # GET /, POST /, DELETE /:supplierId
 │   │   │   └── questionnaires.ts  # GET / (?status=), POST /, GET /:id, POST /:id/send
 │   │   └── supplier/
-│   │       ├── index.ts           # GET /me; mounts questionnaires + ai-inventory + carbon
+│   │       ├── index.ts           # GET /me; mounts all supplier sub-routes
 │   │       ├── questionnaires.ts  # GET /, GET /:id (with response), POST /:id/respond
 │   │       ├── ai-inventory.ts    # GET /, POST /, PATCH /:id, DELETE /:id
-│   │       └── carbon.ts          # GET / (?scope=), POST / (manual + audit), POST /parse (Gemini multimodal)
+│   │       ├── carbon.ts          # GET / (?scope=), POST / (manual + audit), POST /parse (Gemini multimodal)
+│   │       ├── assistant.ts       # POST /chat — page-aware AI assistant; pendingAction pattern
+│   │       └── mcp-tokens.ts      # GET /, POST /, DELETE /:id — MCP token CRUD
+│   ├── mcp/                       # MCP server (port 15151 dev / unix socket prod)
+│   │   ├── server.ts              # startMcpServer() — per-request stateless McpServer; 14 registered tools
+│   │   ├── auth.ts                # resolveMcpToken() + checkLlmRateLimit() (20 LLM calls/token/min)
+│   │   └── tools/
+│   │       ├── carbon.ts          # getCarbonSummary, getCarbonEntries, addCarbonEntry
+│   │       ├── ai-inventory.ts    # getAiInventory, addAiSystem, classifyAiTool (rate-limited)
+│   │       ├── questionnaires.ts  # getPendingQuestionnaires, getQuestionnaire, submitQuestionnaireResponse, suggestQuestionnaireAnswers (rate-limited)
+│   │       ├── compliance.ts      # getComplianceStatus, getDeadlineCalendar
+│   │       └── guidance.ts        # askComplianceQuestion, explainQuestionnaireField (both rate-limited)
 │   ├── agents/                    # Six specialized agents — all fully implemented
 │   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro Preview; dispatchPlan() for job tracking; withRetry()
 │   │   ├── intake.ts              # Maps questionnaire questions to existing supplier data
@@ -82,6 +93,8 @@
 │   └── frontend/
 │       ├── enterprise/            # Enterprise dashboard React app
 │       └── supplier/              # Supplier portal React app
+│           └── components/
+│               └── Assistant.tsx  # Floating chat widget — Bot button, pendingAction confirm/dismiss
 ├── infra/
 │   └── main.tf                    # OpenTofu — Vultr VM + networking
 ├── DEPLOY.md                      # Manual production deploy checklist (Vultr + Cloudflare + OAuth)
@@ -242,4 +255,4 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 
 ---
 
-*Last updated: 2026-05-16 (job tracking, retry, UUID validation, agent tests, prod deploy scripts)*
+*Last updated: 2026-05-17 (MCP server port 15151, in-portal AI assistant, Settings tab, mcp_tokens table, 4 new test files)*

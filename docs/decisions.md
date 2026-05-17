@@ -6,6 +6,31 @@ Run `/decision` to add an entry.
 
 ---
 
+## ADR-012: MCP Server — Per-Request Stateless Pattern with Bun-Native Transport
+
+**Date:** 2026-05-17
+**Status:** Accepted
+
+**Context:**
+Suppliers need to expose their compliance data to external AI agents (Claude Desktop, Cursor) via the Model Context Protocol. The MCP SDK supports two transport implementations: `StreamableHTTPServerTransport` (Node.js `IncomingMessage` / `ServerResponse`) and `WebStandardStreamableHTTPServerTransport` (web-standard `Request` / `Response`). Bun's `Bun.serve()` uses web-standard APIs, not Node.js `http`. The SDK's `server.tool()` API was deprecated in v1.29.0 in favour of `server.registerTool()`.
+
+**Options Considered:**
+- Stateful sessions per-token: complex, requires session cleanup, memory leak risk
+- Per-request stateless `McpServer` + transport: slight overhead per request, no session state to manage
+- Node.js-compatible transport with polyfill: brittle, defeats Bun's purpose
+
+**Decision:**
+Per-request stateless pattern: each HTTP request creates a new `McpServer`, calls `registerAllTools()`, connects a `WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })`, and returns `transport.handleRequest(req)`. Auth resolves via SHA-256 hash lookup before any server creation. All 14 tools registered with `server.registerTool()` (not deprecated `server.tool()`). Rate limit enforced in the handler for MCP requests; `checkLlmRateLimit(tokenId)` is also exported for use in standalone tool functions called from the assistant route.
+
+**Consequences:**
+- ✅ Bun-native: zero Node.js polyfills, uses web-standard Request/Response
+- ✅ No session cleanup — every request is self-contained
+- ✅ Stateless: safe to run behind any load balancer without sticky sessions
+- ✅ `registerTool()` API is forward-compatible with MCP SDK v1.29.0+
+- ⚠️ McpServer + transport instantiation per request has minor overhead — acceptable for compliance tooling (not high-throughput)
+
+---
+
 ## ADR-011: Gemini Dual-Mode Auth — AI Studio Dev, Vertex AI ADC Prod
 
 **Date:** 2026-05-14

@@ -79,4 +79,4 @@ DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test src/agen
 
 ---
 
-*Last updated: 2026-05-16 (25 tests; added carbon + esrs-report test files; mock.module leak fix documented; paxis_test creation documented)*
+*Last updated: 2026-05-17 (44 tests across 9 files; added mcp/auth.test.ts, mcp/tools/carbon.test.ts, mcp/tools/questionnaires.test.ts, routes/supplier/assistant.test.ts)*
