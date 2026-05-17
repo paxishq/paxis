@@ -20,10 +20,12 @@
     "auth:generate": "bun node_modules/.bin/better-auth generate --config src/lib/auth.ts --output src/db/auth-schema.ts --yes"
   },
   "dependencies": {
+    "@google/genai": "^2.2.0",
     "@hono/zod-validator": "^0.8.0",
     "better-auth": "^1.6.11",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.18",
+    "openai": "^6.37.0",
     "zod": "^4.4.3"
   }
 }
