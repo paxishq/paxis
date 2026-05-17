@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  ArrowLeft,
   Bot,
   CheckCircle2,
   ClipboardCheck,
@@ -10,6 +11,7 @@ import {
   LogOut,
   Plus,
   Sparkles,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -1520,6 +1522,302 @@ function ComplianceReportPage({
   );
 }
 
+// ── Questionnaire detail page ─────────────────────────────────────────────────
+
+function QuestionnaireDetailPage({
+  id,
+  onBack,
+  onDone,
+}: {
+  id: string;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const [data, setData] = useState<QuestionnaireWithResponse | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/supplier/questionnaires/${id}`)
+      .then((r) => r.json())
+      .then((d: QuestionnaireWithResponse) => {
+        setData(d);
+        if (d.response?.answers) {
+          const existing: Record<string, string> = {};
+          for (const [k, v] of Object.entries(d.response.answers)) {
+            existing[k] = String(v);
+          }
+          setAnswers(existing);
+        }
+      });
+  }, [id]);
+
+  async function save(submit: boolean) {
+    if (!data) return;
+    submit ? setSubmitting(true) : setSaving(true);
+    await fetch(`/api/supplier/questionnaires/${id}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers, submit }),
+    });
+    submit ? setSubmitting(false) : setSaving(false);
+    if (submit) onDone();
+  }
+
+  function formatAnswer(value: unknown): string {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (value === "yes") return "Yes";
+    if (value === "no") return "No";
+    return String(value);
+  }
+
+  const isOpen =
+    data?.status === "sent" ||
+    data?.status === "in_progress" ||
+    data?.status === "overdue";
+  const isCompleted = data?.status === "completed";
+  const allAnswered =
+    data?.questions
+      .filter((q) => q.required)
+      .every((q) => answers[q.id]?.trim()) ?? false;
+
+  return (
+    <div>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-3 py-5 border-b border-white/[0.05] mb-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-[12px] text-zinc-600 hover:text-zinc-300 transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          Questionnaires
+        </button>
+        <span className="text-zinc-700">/</span>
+        <h1 className="text-[15px] font-semibold text-white tracking-[-0.01em] flex-1">
+          {data?.title ?? "Loading…"}
+        </h1>
+        {data && <StatusChip status={data.status} />}
+        {data?.dueAt && (
+          <span className="text-[11px] font-mono text-zinc-600 bg-white/[0.03] border border-white/[0.05] px-2 py-0.5 rounded">
+            Due {formatDate(data.dueAt)}
+          </span>
+        )}
+      </div>
+
+      {!data ? (
+        <div className="flex items-center justify-center py-24">
+          <p className="text-[13px] text-zinc-600">Loading…</p>
+        </div>
+      ) : isCompleted ? (
+        /* Read-only view */
+        <div className="space-y-4 max-w-2xl">
+          <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-4">
+            Submitted response
+          </p>
+          {data.questions.map((q, i) => {
+            const ans = data.response?.answers[q.id];
+            return (
+              <div key={q.id} className="space-y-1.5">
+                <p className="text-[12px] font-medium text-zinc-400">
+                  <span className="font-mono text-zinc-600 mr-1.5">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {q.text}
+                </p>
+                <div className="rounded-md bg-white/[0.025] border border-white/[0.06] px-3 py-2 text-[13px] text-zinc-200">
+                  {formatAnswer(ans)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : isOpen ? (
+        /* Response form */
+        <div className="max-w-2xl">
+          <div className="space-y-5 mb-8">
+            {data.questions.map((q, i) => (
+              <div key={q.id} className="space-y-2">
+                <label className="block text-[12px] font-medium text-zinc-300">
+                  <span className="font-mono text-zinc-600 mr-1.5">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {q.text}
+                  {q.required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                {q.type === "number" ? (
+                  <Input
+                    type="number"
+                    value={answers[q.id] ?? ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [q.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g. 1500"
+                    className="h-8 text-sm font-mono"
+                  />
+                ) : q.type === "boolean" ? (
+                  <Select
+                    value={answers[q.id] ?? ""}
+                    onValueChange={(v) =>
+                      setAnswers((prev) => ({ ...prev, [q.id]: v }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : q.type === "select" && q.options ? (
+                  <Select
+                    value={answers[q.id] ?? ""}
+                    onValueChange={(v) =>
+                      setAnswers((prev) => ({ ...prev, [q.id]: v }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {q.options.map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-sm">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Textarea
+                    value={answers[q.id] ?? ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [q.id]: e.target.value,
+                      }))
+                    }
+                    rows={3}
+                    className="text-sm resize-none"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-4 border-t border-white/[0.05]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => save(false)}
+              disabled={saving || submitting}
+              className="h-8 text-[13px]"
+            >
+              {saving ? "Saving…" : "Save draft"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => save(true)}
+              disabled={!allAnswered || saving || submitting}
+              className="h-8 text-[13px] bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-700"
+            >
+              {submitting ? "Submitting…" : "Submit response"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── AI inventory item detail page ─────────────────────────────────────────────
+
+function AiItemDetailPage({
+  item,
+  onBack,
+  onDeleted,
+}: {
+  item: AiInventory;
+  onBack: () => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    await fetch(`/api/supplier/ai-inventory/${item.id}`, { method: "DELETE" });
+    setDeleting(false);
+    onDeleted();
+  }
+
+  return (
+    <div>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-3 py-5 border-b border-white/[0.05] mb-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-[12px] text-zinc-600 hover:text-zinc-300 transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          AI inventory
+        </button>
+        <span className="text-zinc-700">/</span>
+        <h1 className="text-[15px] font-semibold text-white tracking-[-0.01em] flex-1">
+          {item.toolName}
+        </h1>
+        <RiskChip tier={item.riskTier} />
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-500 hover:text-red-400 bg-red-950/30 hover:bg-red-950/50 border border-red-900/40 rounded px-2.5 py-1.5 transition-all disabled:opacity-50"
+        >
+          <Trash2 className="size-3" />
+          {deleting ? "Deleting…" : "Delete"}
+        </button>
+      </div>
+
+      <div className="max-w-2xl space-y-4">
+        <div>
+          <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-2">
+            Description
+          </p>
+          <div className="rounded-lg bg-white/[0.025] border border-white/[0.06] px-4 py-3.5">
+            <p className="text-[13px] text-zinc-300 leading-relaxed">
+              {item.description ?? (
+                <span className="text-zinc-600 italic">
+                  No description provided.
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-2">
+            Risk classification justification
+          </p>
+          <div className="rounded-lg bg-white/[0.025] border border-white/[0.06] px-4 py-3.5">
+            <p className="text-[13px] text-zinc-300 leading-relaxed">
+              {item.justification ?? (
+                <span className="text-zinc-600 italic">
+                  No justification recorded yet. Run the AI Act classification
+                  agent to generate one.
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function SupplierApp() {
@@ -1529,6 +1827,16 @@ export default function SupplierApp() {
   const [carbonEntries, setCarbonEntries] = useState<CarbonEntry[]>([]);
   const [aiInventory, setAiInventory] = useState<AiInventory[]>([]);
   const [page, setPage] = useState<SupplierPage>("questionnaires");
+  const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<
+    string | null
+  >(null);
+  const [selectedAiItemId, setSelectedAiItemId] = useState<string | null>(null);
+
+  function navigate(p: SupplierPage) {
+    setPage(p);
+    setSelectedQuestionnaireId(null);
+    setSelectedAiItemId(null);
+  }
 
   function loadQuestionnaires() {
     fetch("/api/supplier/questionnaires")
@@ -1606,26 +1914,26 @@ export default function SupplierApp() {
         <nav className="flex items-center -mb-px">
           <NavBtn
             active={page === "questionnaires"}
-            onClick={() => setPage("questionnaires")}
+            onClick={() => navigate("questionnaires")}
             badge={pending}
           >
             <FileText className="size-3.5" />
             Questionnaires
           </NavBtn>
-          <NavBtn active={page === "carbon"} onClick={() => setPage("carbon")}>
+          <NavBtn active={page === "carbon"} onClick={() => navigate("carbon")}>
             <Leaf className="size-3.5" />
             Carbon
           </NavBtn>
           <NavBtn
             active={page === "ai-inventory"}
-            onClick={() => setPage("ai-inventory")}
+            onClick={() => navigate("ai-inventory")}
           >
             <Bot className="size-3.5" />
             AI Inventory
           </NavBtn>
           <NavBtn
             active={page === "compliance"}
-            onClick={() => setPage("compliance")}
+            onClick={() => navigate("compliance")}
           >
             <ClipboardCheck className="size-3.5" />
             Compliance
@@ -1652,7 +1960,7 @@ export default function SupplierApp() {
       {/* Main */}
       <main className="max-w-5xl mx-auto px-6">
         {/* ── Questionnaires ── */}
-        {page === "questionnaires" && (
+        {page === "questionnaires" && !selectedQuestionnaireId && (
           <div>
             <PageHeader
               title="Questionnaires"
@@ -1668,12 +1976,10 @@ export default function SupplierApp() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/[0.06]">
-                    {["Title", "Status", "Due", ""].map((h, i) => (
+                    {["Title", "Status", "Due"].map((h) => (
                       <th
-                        key={i}
-                        className={`pb-2.5 text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] ${
-                          i === 3 ? "text-right" : "text-left"
-                        }`}
+                        key={h}
+                        className="pb-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em]"
                       >
                         {h}
                       </th>
@@ -1684,7 +1990,8 @@ export default function SupplierApp() {
                   {questionnaires.map((q) => (
                     <tr
                       key={q.id}
-                      className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors"
+                      onClick={() => setSelectedQuestionnaireId(q.id)}
+                      className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors cursor-pointer"
                     >
                       <td className="py-3 text-[13px] font-medium text-zinc-200">
                         {q.title}
@@ -1695,25 +2002,22 @@ export default function SupplierApp() {
                       <td className="py-3 font-mono text-[12px] text-zinc-600">
                         {formatDate(q.dueAt)}
                       </td>
-                      <td className="py-3 text-right">
-                        {(q.status === "sent" ||
-                          q.status === "in_progress" ||
-                          q.status === "overdue") && (
-                          <RespondSheet
-                            questionnaireId={q.id}
-                            onDone={loadQuestionnaires}
-                          />
-                        )}
-                        {q.status === "completed" && (
-                          <ViewResponseSheet questionnaireId={q.id} />
-                        )}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
           </div>
+        )}
+        {page === "questionnaires" && selectedQuestionnaireId && (
+          <QuestionnaireDetailPage
+            id={selectedQuestionnaireId}
+            onBack={() => setSelectedQuestionnaireId(null)}
+            onDone={() => {
+              setSelectedQuestionnaireId(null);
+              loadQuestionnaires();
+            }}
+          />
         )}
 
         {/* ── Carbon ── */}
@@ -1825,7 +2129,7 @@ export default function SupplierApp() {
         )}
 
         {/* ── AI Inventory ── */}
-        {page === "ai-inventory" && (
+        {page === "ai-inventory" && !selectedAiItemId && (
           <div>
             <PageHeader
               title="AI inventory"
@@ -1853,12 +2157,7 @@ export default function SupplierApp() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/[0.06]">
-                    {[
-                      "System",
-                      "Risk tier",
-                      "Description",
-                      "Justification",
-                    ].map((h) => (
+                    {["System", "Risk tier", "Description"].map((h) => (
                       <th
                         key={h}
                         className="pb-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em]"
@@ -1872,7 +2171,8 @@ export default function SupplierApp() {
                   {aiInventory.map((item) => (
                     <tr
                       key={item.id}
-                      className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors"
+                      onClick={() => setSelectedAiItemId(item.id)}
+                      className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors cursor-pointer"
                     >
                       <td className="py-3 text-[13px] font-medium text-zinc-200">
                         {item.toolName}
@@ -1880,11 +2180,8 @@ export default function SupplierApp() {
                       <td className="py-3">
                         <RiskChip tier={item.riskTier} />
                       </td>
-                      <td className="py-3 text-[13px] text-zinc-500 max-w-[200px] truncate">
+                      <td className="py-3 text-[13px] text-zinc-500 max-w-[280px] truncate">
                         {item.description ?? "—"}
-                      </td>
-                      <td className="py-3 text-[13px] text-zinc-600 max-w-[200px] truncate">
-                        {item.justification ?? "—"}
                       </td>
                     </tr>
                   ))}
@@ -1893,6 +2190,24 @@ export default function SupplierApp() {
             )}
           </div>
         )}
+        {page === "ai-inventory" &&
+          selectedAiItemId &&
+          (() => {
+            const item = aiInventory.find((i) => i.id === selectedAiItemId);
+            if (!item) return null;
+            return (
+              <AiItemDetailPage
+                item={item}
+                onBack={() => setSelectedAiItemId(null)}
+                onDeleted={() => {
+                  setAiInventory((prev) =>
+                    prev.filter((i) => i.id !== selectedAiItemId),
+                  );
+                  setSelectedAiItemId(null);
+                }}
+              />
+            );
+          })()}
       </main>
     </div>
   );
