@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Bot, CheckCircle2, ClipboardCheck, FileText, Leaf, LogOut, Plus, XCircle } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ClipboardCheck, FileText, FileUp, Leaf, Loader2, LogOut, Plus, Sparkles, XCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +59,17 @@ type CarbonEntry = {
 	periodStart: string;
 	periodEnd: string;
 	sourceDescription: string | null;
+	parsedFromDocument: boolean;
+};
+
+type ParseResult = {
+	status: "ok" | "error" | "skipped";
+	mode?: string;
+	entriesInserted?: number;
+	confidence?: "high" | "medium" | "low";
+	reasoning?: string;
+	error?: string;
+	reason?: string;
 };
 
 type AiInventory = {
@@ -442,6 +453,182 @@ function RespondSheet({
 				</SheetContent>
 			</Sheet>
 		</>
+	);
+}
+
+// ── Upload Document Dialog ────────────────────────────────────────────────────
+
+const CONFIDENCE_CFG = {
+	high:   { label: "High confidence",   color: "text-emerald-400", bg: "bg-emerald-950/50 border-emerald-900/50" },
+	medium: { label: "Medium confidence", color: "text-amber-400",   bg: "bg-amber-950/50 border-amber-900/50" },
+	low:    { label: "Low confidence",    color: "text-red-400",     bg: "bg-red-950/50 border-red-900/50" },
+};
+
+function UploadDocumentDialog({ onParsed }: { onParsed: () => void }) {
+	const [open, setOpen] = useState(false);
+	const [file, setFile] = useState<File | null>(null);
+	const [dragging, setDragging] = useState(false);
+	const [parsing, setParsing] = useState(false);
+	const [result, setResult] = useState<ParseResult | null>(null);
+
+	function handleFile(f: File) {
+		setFile(f);
+		setResult(null);
+	}
+
+	function handleDrop(e: React.DragEvent) {
+		e.preventDefault();
+		setDragging(false);
+		const f = e.dataTransfer.files[0];
+		if (f) handleFile(f);
+	}
+
+	async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+		e.preventDefault();
+		if (!file) return;
+		setParsing(true);
+		setResult(null);
+		const formData = new FormData();
+		formData.append("file", file);
+		const res = await fetch("/api/supplier/carbon/parse", { method: "POST", body: formData });
+		const data = await res.json() as ParseResult;
+		setParsing(false);
+		setResult(data);
+		if (res.ok && data.status === "ok") onParsed();
+	}
+
+	function handleOpenChange(v: boolean) {
+		if (!v) { setFile(null); setResult(null); setParsing(false); }
+		setOpen(v);
+	}
+
+	const confidenceCfg = result?.confidence ? CONFIDENCE_CFG[result.confidence] : null;
+
+	return (
+		<Dialog open={open} onOpenChange={handleOpenChange}>
+			<DialogTrigger asChild>
+				<Button size="sm" variant="outline" className="h-8 gap-1.5 text-[13px] border-emerald-900/50 text-emerald-500 hover:bg-emerald-950/30">
+					<Sparkles className="size-3.5" />
+					Parse document
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="sm:max-w-md">
+				<DialogHeader>
+					<DialogTitle className="text-[14px] font-semibold flex items-center gap-2">
+						<Sparkles className="size-4 text-emerald-500" />
+						AI document parser
+					</DialogTitle>
+					<p className="text-[12px] text-zinc-600 mt-0.5">
+						Upload an energy bill, utility invoice, or fuel receipt — Gemini will extract Scope 1 &amp; 2 figures automatically.
+					</p>
+				</DialogHeader>
+
+				{result?.status === "ok" ? (
+					<div className="space-y-3 pt-1">
+						<div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3.5 space-y-2">
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-1.5">
+									<CheckCircle2 className="size-4 text-emerald-400" />
+									<span className="text-[13px] font-medium text-emerald-400">
+										{result.entriesInserted} entr{result.entriesInserted === 1 ? "y" : "ies"} extracted
+									</span>
+								</div>
+								{confidenceCfg && (
+									<span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${confidenceCfg.bg} ${confidenceCfg.color}`}>
+										{confidenceCfg.label}
+									</span>
+								)}
+							</div>
+							{result.reasoning && (
+								<p className="text-[12px] text-zinc-400 leading-relaxed">{result.reasoning}</p>
+							)}
+						</div>
+						<DialogFooter>
+							<Button size="sm" onClick={() => handleOpenChange(false)} className="h-8 text-[13px]">
+								Done
+							</Button>
+						</DialogFooter>
+					</div>
+				) : result?.status === "error" ? (
+					<div className="space-y-3 pt-1">
+						<div className="rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-3.5 flex items-start gap-2">
+							<XCircle className="size-4 text-red-400 shrink-0 mt-0.5" />
+							<p className="text-[12px] text-red-300 leading-relaxed">{result.error ?? "Parsing failed. Try a clearer image or PDF."}</p>
+						</div>
+						<DialogFooter>
+							<Button size="sm" variant="outline" onClick={() => setResult(null)} className="h-8 text-[13px]">
+								Try again
+							</Button>
+						</DialogFooter>
+					</div>
+				) : (
+					<form onSubmit={handleSubmit} className="space-y-3 pt-1">
+						{/* Drop zone */}
+						<div
+							onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+							onDragLeave={() => setDragging(false)}
+							onDrop={handleDrop}
+							className={`relative rounded-lg border-2 border-dashed transition-colors ${
+								dragging
+									? "border-emerald-500/50 bg-emerald-950/20"
+									: file
+									? "border-emerald-900/50 bg-emerald-950/10"
+									: "border-white/[0.08] hover:border-white/[0.14]"
+							} px-6 py-8 flex flex-col items-center gap-3 cursor-pointer`}
+						>
+							<input
+								type="file"
+								accept=".pdf,.jpg,.jpeg,.png,.webp"
+								onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+								className="absolute inset-0 opacity-0 cursor-pointer"
+							/>
+							{file ? (
+								<>
+									<div className="size-10 rounded-lg bg-emerald-950/60 border border-emerald-900/50 flex items-center justify-center">
+										<FileUp className="size-5 text-emerald-400" />
+									</div>
+									<div className="text-center">
+										<p className="text-[13px] font-medium text-zinc-200">{file.name}</p>
+										<p className="text-[11px] text-zinc-600 mt-0.5">
+											{(file.size / 1024).toFixed(0)} KB · {file.type}
+										</p>
+									</div>
+								</>
+							) : (
+								<>
+									<div className="size-10 rounded-lg bg-white/[0.03] border border-white/[0.07] flex items-center justify-center">
+										<FileUp className="size-5 text-zinc-600" />
+									</div>
+									<div className="text-center">
+										<p className="text-[13px] font-medium text-zinc-400">Drop file here or click to browse</p>
+										<p className="text-[11px] text-zinc-700 mt-0.5">PDF, JPEG, PNG, or WebP · max 10 MB</p>
+									</div>
+								</>
+							)}
+						</div>
+
+						{parsing && (
+							<div className="flex items-center gap-2.5 text-[12px] text-zinc-500 bg-white/[0.02] border border-white/[0.05] rounded-lg px-4 py-3">
+								<Loader2 className="size-3.5 animate-spin shrink-0 text-emerald-500" />
+								Gemini is reading your document…
+							</div>
+						)}
+
+						<DialogFooter>
+							<Button
+								type="submit"
+								size="sm"
+								disabled={!file || parsing}
+								className="h-8 text-[13px] gap-1.5"
+							>
+								{parsing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+								{parsing ? "Parsing…" : "Extract emissions"}
+							</Button>
+						</DialogFooter>
+					</form>
+				)}
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -867,6 +1054,10 @@ export default function SupplierApp() {
 			.then(setQuestionnaires);
 	}
 
+	function reloadCarbon() {
+		fetch("/api/supplier/carbon").then((r) => r.ok ? r.json() : []).then(setCarbonEntries);
+	}
+
 	useEffect(() => {
 		fetch("/api/supplier/me").then((r) => {
 			if (r.status === 401 || r.status === 403) { setAuthState("unauthed"); return null; }
@@ -1021,7 +1212,12 @@ export default function SupplierApp() {
 						<PageHeader
 							title="Carbon ledger"
 							description="Scope 1 and 2 emissions for CSRD reporting"
-							action={<AddCarbonDialog onAdded={(e) => setCarbonEntries((prev) => [...prev, e])} />}
+							action={
+								<div className="flex items-center gap-2">
+									<UploadDocumentDialog onParsed={reloadCarbon} />
+									<AddCarbonDialog onAdded={(e) => setCarbonEntries((prev) => [...prev, e])} />
+								</div>
+							}
 						/>
 						<div className="grid grid-cols-2 gap-3 mb-6">
 							<StatCard label="Total scope 1" value={scope1Total} unit="tCO₂e" />
@@ -1031,14 +1227,19 @@ export default function SupplierApp() {
 							<EmptyState
 								icon={Leaf}
 								title="No carbon entries yet"
-								description="Log your Scope 1 and Scope 2 emissions to build your carbon ledger for CSRD reporting."
-								action={<AddCarbonDialog onAdded={(e) => setCarbonEntries((prev) => [...prev, e])} />}
+								description="Upload an energy bill and Gemini will extract emissions automatically, or add figures manually."
+								action={
+									<div className="flex items-center gap-2">
+										<UploadDocumentDialog onParsed={reloadCarbon} />
+										<AddCarbonDialog onAdded={(e) => setCarbonEntries((prev) => [...prev, e])} />
+									</div>
+								}
 							/>
 						) : (
 							<table className="w-full">
 								<thead>
 									<tr className="border-b border-white/[0.06]">
-										{["Scope", "CO₂e (tonnes)", "Period", "Source"].map((h) => (
+										{["Scope", "CO₂e (tonnes)", "Period", "Source", ""].map((h) => (
 											<th key={h} className="pb-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em]">
 												{h}
 											</th>
@@ -1065,6 +1266,14 @@ export default function SupplierApp() {
 											</td>
 											<td className="py-3 text-[13px] text-zinc-500">
 												{e.sourceDescription ?? "—"}
+											</td>
+											<td className="py-3 text-right">
+												{e.parsedFromDocument && (
+													<span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border bg-emerald-950/40 text-emerald-500 border-emerald-900/50">
+														<Sparkles className="size-2.5" />
+														AI
+													</span>
+												)}
 											</td>
 										</tr>
 									))}

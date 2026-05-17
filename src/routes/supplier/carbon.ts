@@ -66,9 +66,30 @@ router.post("/", zValidator("json", createSchema), async (c) => {
 	return c.json(entry, 201);
 });
 
-// Stub — will invoke Carbon Agent with Gemini Flash multimodal once agent is implemented
 router.post("/parse", async (c) => {
-	return c.json({ error: "Document parsing not yet implemented" }, 501);
+	const user = c.get("user")!;
+	if (!user.supplierId)
+		return c.json({ error: "Not linked to a supplier" }, 403);
+
+	const body = await c.req.parseBody();
+	const file = body["file"];
+
+	if (!file || !(file instanceof File))
+		return c.json({ error: "No file provided" }, 400);
+
+	const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+	if (!allowed.includes(file.type))
+		return c.json({ error: "Unsupported file type. Use PDF, JPEG, PNG, or WebP." }, 400);
+
+	const documentData = Buffer.from(await file.arrayBuffer()).toString("base64");
+
+	const { runCarbon } = await import("../../agents/carbon");
+	const result = await runCarbon(
+		{ documentData, mimeType: file.type },
+		{ supplierId: user.supplierId },
+	);
+
+	return c.json(result);
 });
 
 export default router;
