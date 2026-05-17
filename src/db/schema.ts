@@ -40,7 +40,10 @@ export const agentNameEnum = pgEnum("agent_name", [
   "esrs-report",
 ]);
 
-export const emissionsScopeEnum = pgEnum("emissions_scope", ["scope1", "scope2"]);
+export const emissionsScopeEnum = pgEnum("emissions_scope", [
+  "scope1",
+  "scope2",
+]);
 
 // ── Enterprises ──────────────────────────────────────────────────────────────
 
@@ -50,8 +53,12 @@ export const enterprises = pgTable("enterprises", {
   vatNumber: text("vat_number"),
   country: text("country").notNull(),
   reportingYear: integer("reporting_year").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 // ── Suppliers ────────────────────────────────────────────────────────────────
@@ -61,8 +68,12 @@ export const suppliers = pgTable("suppliers", {
   name: text("name").notNull(),
   vatNumber: text("vat_number"),
   country: text("country").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 // ── Enterprise ↔ Supplier relationships ─────────────────────────────────────
@@ -77,7 +88,9 @@ export const enterpriseSuppliers = pgTable(
     supplierId: uuid("supplier_id")
       .notNull()
       .references(() => suppliers.id, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (t) => [
     index("enterprise_suppliers_enterprise_idx").on(t.enterpriseId),
@@ -91,6 +104,7 @@ export const enterpriseSuppliers = pgTable(
 export const enterpriseRelations = relations(enterprises, ({ many }) => ({
   users: many(user),
   suppliers: many(enterpriseSuppliers),
+  carbonEntries: many(enterpriseCarbonEntries),
 }));
 
 export const supplierRelations = relations(suppliers, ({ many }) => ({
@@ -98,16 +112,19 @@ export const supplierRelations = relations(suppliers, ({ many }) => ({
   enterprises: many(enterpriseSuppliers),
 }));
 
-export const enterpriseSuppliersRelations = relations(enterpriseSuppliers, ({ one }) => ({
-  enterprise: one(enterprises, {
-    fields: [enterpriseSuppliers.enterpriseId],
-    references: [enterprises.id],
+export const enterpriseSuppliersRelations = relations(
+  enterpriseSuppliers,
+  ({ one }) => ({
+    enterprise: one(enterprises, {
+      fields: [enterpriseSuppliers.enterpriseId],
+      references: [enterprises.id],
+    }),
+    supplier: one(suppliers, {
+      fields: [enterpriseSuppliers.supplierId],
+      references: [suppliers.id],
+    }),
   }),
-  supplier: one(suppliers, {
-    fields: [enterpriseSuppliers.supplierId],
-    references: [suppliers.id],
-  }),
-}));
+);
 
 export const userDomainRelations = relations(user, ({ one }) => ({
   enterprise: one(enterprises, {
@@ -138,8 +155,12 @@ export const questionnaires = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     questions: jsonb("questions").notNull().default("[]"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (t) => [
     index("questionnaires_enterprise_idx").on(t.enterpriseId),
@@ -160,10 +181,16 @@ export const questionnaireResponses = pgTable(
       .references(() => suppliers.id, { onDelete: "cascade" }),
     answers: jsonb("answers").notNull().default("{}"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (t) => [index("questionnaire_responses_questionnaire_idx").on(t.questionnaireId)],
+  (t) => [
+    index("questionnaire_responses_questionnaire_idx").on(t.questionnaireId),
+  ],
 );
 
 // ── EU AI Act Inventory ──────────────────────────────────────────────────────
@@ -181,8 +208,12 @@ export const aiInventories = pgTable(
     justification: text("justification"),
     documentationUrl: text("documentation_url"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (t) => [index("ai_inventories_supplier_idx").on(t.supplierId)],
 );
@@ -202,12 +233,41 @@ export const carbonEntries = pgTable(
     co2Tonnes: real("co2_tonnes").notNull(),
     sourceDescription: text("source_description"),
     evidenceUrl: text("evidence_url"),
-    parsedFromDocument: boolean("parsed_from_document").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    parsedFromDocument: boolean("parsed_from_document")
+      .notNull()
+      .default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (t) => [
     index("carbon_entries_supplier_idx").on(t.supplierId),
     index("carbon_entries_scope_idx").on(t.scope),
+  ],
+);
+
+// ── Enterprise Carbon Entries (Scope 1 & 2 — enterprise's own emissions) ─────
+
+export const enterpriseCarbonEntries = pgTable(
+  "enterprise_carbon_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enterpriseId: uuid("enterprise_id")
+      .notNull()
+      .references(() => enterprises.id, { onDelete: "cascade" }),
+    scope: emissionsScopeEnum("scope").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    co2Tonnes: real("co2_tonnes").notNull(),
+    sourceDescription: text("source_description"),
+    evidenceUrl: text("evidence_url"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("enterprise_carbon_enterprise_idx").on(t.enterpriseId),
+    index("enterprise_carbon_scope_idx").on(t.scope),
   ],
 );
 
@@ -224,7 +284,9 @@ export const scope3Aggregates = pgTable(
     co2Tonnes: real("co2_tonnes").notNull(),
     supplierCount: integer("supplier_count").notNull(),
     completionRate: real("completion_rate").notNull(),
-    calculatedAt: timestamp("calculated_at", { withTimezone: true }).defaultNow().notNull(),
+    calculatedAt: timestamp("calculated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (t) => [index("scope3_aggregates_enterprise_idx").on(t.enterpriseId)],
 );
@@ -239,10 +301,16 @@ export const auditLog = pgTable(
     action: text("action").notNull(),
     entityType: text("entity_type"),
     entityId: uuid("entity_id"),
-    enterpriseId: uuid("enterprise_id").references(() => enterprises.id, { onDelete: "set null" }),
-    supplierId: uuid("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+    enterpriseId: uuid("enterprise_id").references(() => enterprises.id, {
+      onDelete: "set null",
+    }),
+    supplierId: uuid("supplier_id").references(() => suppliers.id, {
+      onDelete: "set null",
+    }),
     payload: jsonb("payload"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (t) => [
     index("audit_log_agent_idx").on(t.agentName),

@@ -58,15 +58,15 @@
 │   │       ├── index.ts           # GET /me; mounts questionnaires + ai-inventory + carbon
 │   │       ├── questionnaires.ts  # GET /, GET /:id (with response), POST /:id/respond
 │   │       ├── ai-inventory.ts    # GET /, POST /, PATCH /:id, DELETE /:id
-│   │       └── carbon.ts          # GET / (?scope=), POST / (manual), POST /parse (stub)
-│   ├── agents/                    # Six specialized agents
+│   │       └── carbon.ts          # GET / (?scope=), POST / (manual + audit), POST /parse (Gemini multimodal)
+│   ├── agents/                    # Six specialized agents — all fully implemented
 │   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro Preview
-│   │   ├── intake.ts              # IMPLEMENTED — maps questionnaire questions to existing supplier data
-│   │   ├── ai-act.ts              # EU AI Act inventory & risk classification (stub)
-│   │   ├── carbon.ts              # Scope 1 & 2 emissions ledger (stub)
-│   │   ├── supply-chain.ts        # IMPLEMENTED — aggregates Scope 3 from completed responses
-│   │   ├── risk-deadline.ts       # Compliance calendar & alerts
-│   │   └── esrs-report.ts         # Audit-ready ESRS output
+│   │   ├── intake.ts              # Maps questionnaire questions to existing supplier data
+│   │   ├── ai-act.ts              # EU AI Act risk tier classification (Gemini Flash)
+│   │   ├── carbon.ts              # Scope 1 & 2 from documents (multimodal) or summary mode
+│   │   ├── supply-chain.ts        # Aggregates Scope 3 from completed responses
+│   │   ├── risk-deadline.ts       # CSRD filing readiness + risk flags (Gemini Flash)
+│   │   └── esrs-report.ts         # ESRS 2 + ESRS E1 report generation (Gemini Pro)
 │   ├── lib/
 │   │   ├── llm.ts                 # LLM provider abstraction (Gemini AI Studio / Vertex AI ADC | Featherless)
 │   │   ├── auth-client.ts         # Better Auth React client (frontend signIn/signOut)
@@ -117,13 +117,13 @@ Copy `.env` and set `GEMINI_API_KEY` (from aistudio.google.com) for local dev. T
 |-------|------|--------|------|
 | **Planner** | `agents/planner.ts` | **Implemented** | Coordinates all agents; Gemini 3.1 Pro Preview at temp 0.2; Zod-validated JSON plan; dynamic dispatch |
 | **Intake** | `agents/intake.ts` | **Implemented** | Fetches questionnaire + supplier carbon/AI data; Gemini 3.1 Flash Lite maps existing data to questions; upserts draft response; marks questionnaire in_progress |
-| **EU AI Act** | `agents/ai-act.ts` | Stub | Discovers and inventories AI tools; classifies by risk tier; generates documentation |
-| **Carbon** | `agents/carbon.ts` | Stub | Ingests energy bills via Gemini multimodal; calculates Scope 1 & 2 |
+| **EU AI Act** | `agents/ai-act.ts` | **Implemented** | Classifies AI inventory items by EU AI Act risk tier; skips items reviewed in last 30 days; updates justification + reviewedAt |
+| **Carbon** | `agents/carbon.ts` | **Implemented** | Document mode: Gemini multimodal extracts Scope 1 & 2 from energy bills, inserts `carbonEntries`; summary mode: aggregates existing entries |
 | **Supply Chain** | `agents/supply-chain.ts` | **Implemented** | Aggregates completed questionnaire responses; Gemini 3.1 Flash Lite extracts emission figures per supplier; upserts `scope3_aggregates` |
-| **Risk & Deadline** | `agents/risk-deadline.ts` | Stub | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
-| **ESRS Report** | `agents/esrs-report.ts` | Stub | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
+| **Risk & Deadline** | `agents/risk-deadline.ts` | **Implemented** | Builds compliance snapshot; Gemini Flash assesses filing readiness 0–100%; surfaces deadline/gap/threshold/compliance flags |
+| **ESRS Report** | `agents/esrs-report.ts` | **Implemented** | Pulls Scope 3 aggregates + questionnaire data; Gemini Pro generates structured ESRS 2 + ESRS E1 report; stored in audit log payload |
 
-All agents share a single immutable audit log written to Postgres via `src/lib/audit.ts`. Every agent function calls `writeAudit()` before returning — stubs included. Routes fire agents with `runPlan(...).catch(console.error)` and return the HTTP response immediately; agent orchestration runs in the background.
+All agents share a single immutable audit log written to Postgres via `src/lib/audit.ts`. Every agent function calls `writeAudit()` before returning. Routes fire agents with `runPlan(...).catch(console.error)` and return the HTTP response immediately; agent orchestration runs in the background.
 
 `AgentContext` is exported from `agents/intake.ts` and imported by all other agents:
 ```typescript
@@ -238,4 +238,4 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 
 ---
 
-*Last updated: 2026-05-14 (post-frontend-auth-agents)*
+*Last updated: 2026-05-15 (all agents implemented; carbon audit fixed)*

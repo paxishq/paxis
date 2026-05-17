@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { runPlan } from "../../agents/planner";
-import { carbonEntries } from "../../db/schema";
+import { enterpriseCarbonEntries } from "../../db/schema";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 
@@ -13,20 +13,19 @@ const scopeEnum = z.enum(["scope1", "scope2"]);
 
 router.get("/", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  if (!user.enterpriseId)
+    return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const scope = c.req.query("scope");
   const where =
     scope === "scope1" || scope === "scope2"
       ? and(
-          eq(carbonEntries.supplierId, user.supplierId),
-          eq(carbonEntries.scope, scope),
+          eq(enterpriseCarbonEntries.enterpriseId, user.enterpriseId),
+          eq(enterpriseCarbonEntries.scope, scope),
         )
-      : eq(carbonEntries.supplierId, user.supplierId);
+      : eq(enterpriseCarbonEntries.enterpriseId, user.enterpriseId);
 
-  const rows = await db.select().from(carbonEntries).where(where);
-
+  const rows = await db.select().from(enterpriseCarbonEntries).where(where);
   return c.json(rows);
 });
 
@@ -41,63 +40,51 @@ const createSchema = z.object({
 
 router.post("/", zValidator("json", createSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  if (!user.enterpriseId)
+    return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const body = c.req.valid("json");
 
   const [entry] = await db
-    .insert(carbonEntries)
+    .insert(enterpriseCarbonEntries)
     .values({
-      supplierId: user.supplierId,
+      enterpriseId: user.enterpriseId,
       scope: body.scope,
       periodStart: new Date(body.periodStart),
       periodEnd: new Date(body.periodEnd),
       co2Tonnes: body.co2Tonnes,
       sourceDescription: body.sourceDescription,
       evidenceUrl: body.evidenceUrl,
-      parsedFromDocument: false,
     })
     .returning();
 
   if (!entry) return c.json({ error: "Failed to create entry" }, 500);
 
   runPlan({
-    type: "carbon_entry_added",
-    entryId: entry.id,
-    supplierId: user.supplierId,
+    type: "scope3_recalculate",
+    enterpriseId: user.enterpriseId,
   }).catch(console.error);
 
   return c.json(entry, 201);
 });
 
-router.post("/parse", async (c) => {
+router.delete("/:id", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  if (!user.enterpriseId)
+    return c.json({ error: "Not linked to an enterprise" }, 403);
 
-  const body = await c.req.parseBody();
-  const file = body["file"];
+  const deleted = await db
+    .delete(enterpriseCarbonEntries)
+    .where(
+      and(
+        eq(enterpriseCarbonEntries.id, c.req.param("id")),
+        eq(enterpriseCarbonEntries.enterpriseId, user.enterpriseId),
+      ),
+    )
+    .returning();
 
-  if (!file || !(file instanceof File))
-    return c.json({ error: "No file provided" }, 400);
-
-  const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-  if (!allowed.includes(file.type))
-    return c.json(
-      { error: "Unsupported file type. Use PDF, JPEG, PNG, or WebP." },
-      400,
-    );
-
-  const documentData = Buffer.from(await file.arrayBuffer()).toString("base64");
-
-  const { runCarbon } = await import("../../agents/carbon");
-  const result = await runCarbon(
-    { documentData, mimeType: file.type },
-    { supplierId: user.supplierId },
-  );
-
-  return c.json(result);
+  if (!deleted.length) return c.json({ error: "Not found" }, 404);
+  return c.body(null, 204);
 });
 
 export default router;

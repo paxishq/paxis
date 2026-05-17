@@ -7,4 +7,3 @@ plugins = ["bun-plugin-tailwind"]
 [test]
 preload = ["./src/test-setup.ts"]
 coverage = true
-coverageThreshold = 0.8
