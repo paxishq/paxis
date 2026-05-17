@@ -16,22 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  db-test:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: paxis
-      POSTGRES_PASSWORD: paxis
-      POSTGRES_DB: paxis_test
-    ports:
-      - "15152:5432"
-    tmpfs:
-      - /var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U paxis -d paxis_test"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     image: oven/bun:latest
     restart: unless-stopped

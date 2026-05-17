@@ -19,37 +19,37 @@ External LLM calls (Gemini, Featherless) are mocked at the `src/lib/llm.ts` abst
 
 ## Local Test DB
 
-The `db-test` service in `compose.yml` provides an ephemeral Postgres 18 instance on port 15152. It uses `tmpfs` — data does not persist between `docker compose down` cycles, which keeps tests fast and state-free.
+Tests run against `paxis_test` on the same `db` service as local dev (port 15151). One Postgres instance, two database names. `test-setup.ts` creates `paxis_test` on first run if it doesn't exist.
 
-Start it before running tests:
+Start the DB before running tests:
 
 ```sh
-docker compose up db-test -d
+docker compose up db -d
 ```
 
 ## test-setup.ts
 
-Loaded via `bunfig.toml` preload. Runs migrations against the test DB and truncates between tests.
+Loaded via `bunfig.toml` preload. Creates `paxis_test` if needed, runs migrations, and truncates between tests.
 
 **Critical:** `DATABASE_URL` must contain `"test"` — `test-setup.ts` throws otherwise.
 
 ## Running Tests
 
 ```sh
-# start test DB (if not already running)
-docker compose up db-test -d
+# start DB (if not already running)
+docker compose up db -d
 
 # apply schema to test DB (required on first run or after schema changes)
-DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun run db:push
+DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun run db:push
 
 # all tests
-DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test
+DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test
 
 # watch mode
-DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test --watch
+DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test --watch
 
 # single file or directory
-DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test src/agents/carbon
+DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test src/agents/carbon
 ```
 
 ## Conventions
