@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Building2, FileText, LayoutGrid, LogOut, Plus, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, BarChart3, Building2, CheckCircle2, FileText, LayoutGrid, Loader2, LogOut, Plus, RefreshCw, Send, XCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,7 +55,36 @@ type Questionnaire = {
 	questions: Question[];
 };
 
-type EnterprisePage = "overview" | "suppliers" | "questionnaires";
+type EnterprisePage = "overview" | "suppliers" | "questionnaires" | "esrs";
+
+type EsrsReport = {
+	generatedAt: string;
+	report: {
+		title: string;
+		reportingPeriod: string;
+		executiveSummary: string;
+		esrs2General: {
+			governanceOverview: string;
+			strategyAndBusinessModel: string;
+			materialTopics: string[];
+		};
+		esrs1Climate: {
+			scope1tCO2e: number | null;
+			scope2tCO2e: number | null;
+			scope3tCO2e: number | null;
+			totalGHG: number | null;
+			dataQuality: "high" | "medium" | "low";
+			gapsAndLimitations: string;
+		};
+		supplierDataQuality: {
+			totalSuppliersContacted: number;
+			responsesReceived: number;
+			completionRatePercent: number;
+		};
+		recommendedActions: string[];
+		assuranceReadiness: "ready" | "partial" | "not_ready";
+	};
+};
 type AuthState = "loading" | "authed" | "unauthed";
 
 type Scope3Aggregate = {
@@ -295,7 +324,7 @@ function AddSupplierDialog({ onAdded, trigger }: { onAdded: (s: Supplier) => voi
 	const [vatNumber, setVatNumber] = useState("");
 	const [loading, setLoading] = useState(false);
 
-	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+	async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
 		e.preventDefault();
 		setLoading(true);
 		const res = await fetch("/api/enterprise/suppliers", {
@@ -387,7 +416,7 @@ function NewQuestionnaireDialog({
 	const [dueAt, setDueAt] = useState("");
 	const [loading, setLoading] = useState(false);
 
-	async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+	async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
 		e.preventDefault();
 		setLoading(true);
 		const res = await fetch("/api/enterprise/questionnaires", {
@@ -679,6 +708,217 @@ function QuestionnairesPage({
 	);
 }
 
+// ── ESRS Report page ──────────────────────────────────────────────────────────
+
+const READINESS_CONFIG = {
+	ready:     { label: "Assurance ready",   icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-950/50 border-emerald-900/50" },
+	partial:   { label: "Partially ready",   icon: AlertTriangle, color: "text-amber-400",  bg: "bg-amber-950/50 border-amber-900/50" },
+	not_ready: { label: "Not ready",         icon: XCircle,       color: "text-red-400",    bg: "bg-red-950/50 border-red-900/50" },
+};
+
+const QUALITY_COLOR: Record<string, string> = {
+	high:   "text-emerald-400",
+	medium: "text-amber-400",
+	low:    "text-red-400",
+};
+
+function EmissionCell({ value }: { value: number | null }) {
+	if (value == null) return <span className="text-zinc-600">—</span>;
+	return (
+		<span className="font-mono text-white tabular-nums">
+			{value.toLocaleString("en-GB", { maximumFractionDigits: 1 })}
+			<span className="text-zinc-600 text-[11px] ml-1">tCO₂e</span>
+		</span>
+	);
+}
+
+function EsrsReportPage({
+	report,
+	generating,
+	onGenerate,
+}: {
+	report: EsrsReport | null;
+	generating: boolean;
+	onGenerate: () => void;
+}) {
+	const r = report?.report;
+
+	const generateBtn = (
+		<button
+			type="button"
+			onClick={onGenerate}
+			disabled={generating}
+			className="inline-flex items-center gap-1.5 text-[12px] font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] rounded px-3 py-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+		>
+			{generating
+				? <Loader2 className="size-3 animate-spin" />
+				: <RefreshCw className="size-3" />}
+			{generating ? "Generating…" : (r ? "Regenerate" : "Generate report")}
+		</button>
+	);
+
+	if (!r) {
+		return (
+			<div>
+				<PageHeader
+					title="ESRS Report"
+					description="CSRD-standard annual sustainability report"
+					action={generateBtn}
+				/>
+				<EmptyState
+					icon={BarChart3}
+					title="No report generated yet"
+					description="Generate your CSRD-standard ESRS report from aggregated supplier and emissions data."
+					action={generating ? (
+						<div className="flex items-center gap-2 text-[12px] text-zinc-500">
+							<Loader2 className="size-3.5 animate-spin" />
+							Generating report — this takes ~20 seconds…
+						</div>
+					) : (
+						<button
+							type="button"
+							onClick={onGenerate}
+							className="inline-flex items-center gap-1.5 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-500 rounded px-4 py-2 transition-colors"
+						>
+							<BarChart3 className="size-3.5" />
+							Generate ESRS report
+						</button>
+					)}
+				/>
+			</div>
+		);
+	}
+
+	const readiness = READINESS_CONFIG[r.assuranceReadiness];
+	const ReadinessIcon = readiness.icon;
+
+	return (
+		<div>
+			<PageHeader
+				title="ESRS Report"
+				description={`${r.reportingPeriod} · Generated ${formatDate(report.generatedAt)}`}
+				action={generateBtn}
+			/>
+
+			{generating && (
+				<div className="mb-5 flex items-center gap-2.5 text-[12px] text-zinc-500 bg-white/[0.02] border border-white/[0.05] rounded-lg px-4 py-3">
+					<Loader2 className="size-3.5 animate-spin shrink-0" />
+					Generating updated report — page will refresh automatically…
+				</div>
+			)}
+
+			{/* Assurance readiness + title */}
+			<div className="mb-5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-5 py-4 flex items-start justify-between gap-4">
+				<div>
+					<p className="text-[11px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-1.5">Report title</p>
+					<p className="text-[15px] font-semibold text-white tracking-[-0.01em]">{r.title}</p>
+					<p className="text-[12px] text-zinc-600 mt-1 leading-relaxed max-w-xl">{r.executiveSummary}</p>
+				</div>
+				<div className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-[11px] font-medium ${readiness.bg} ${readiness.color}`}>
+					<ReadinessIcon className="size-3" />
+					{readiness.label}
+				</div>
+			</div>
+
+			{/* ESRS E1: Climate emissions */}
+			<div className="mb-4">
+				<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">ESRS E1 — Climate change (GHG emissions)</p>
+				<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] overflow-hidden">
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-white/[0.05]">
+								{["Scope", "Category", "Emissions", ""].map((h, i) => (
+									<th key={i} className="px-4 py-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em]">{h}</th>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{[
+								{ scope: "Scope 1", category: "Direct combustion",       value: r.esrs1Climate.scope1tCO2e },
+								{ scope: "Scope 2", category: "Purchased energy",        value: r.esrs1Climate.scope2tCO2e },
+								{ scope: "Scope 3", category: "Supply chain (upstream)", value: r.esrs1Climate.scope3tCO2e },
+							].map((row) => (
+								<tr key={row.scope} className="border-b border-white/[0.04]">
+									<td className="px-4 py-3 text-[12px] font-medium text-zinc-300">{row.scope}</td>
+									<td className="px-4 py-3 text-[12px] text-zinc-500">{row.category}</td>
+									<td className="px-4 py-3"><EmissionCell value={row.value} /></td>
+									<td className="px-4 py-3 text-right">
+										{row.value == null && (
+											<span className="text-[10px] text-zinc-700 font-medium">Data missing</span>
+										)}
+									</td>
+								</tr>
+							))}
+							<tr className="bg-white/[0.015]">
+								<td className="px-4 py-3 text-[12px] font-semibold text-zinc-200" colSpan={2}>Total GHG</td>
+								<td className="px-4 py-3"><EmissionCell value={r.esrs1Climate.totalGHG} /></td>
+								<td className="px-4 py-3 text-right">
+									<span className={`text-[10px] font-medium uppercase tracking-wide ${QUALITY_COLOR[r.esrs1Climate.dataQuality]}`}>
+										{r.esrs1Climate.dataQuality} quality
+									</span>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					{r.esrs1Climate.gapsAndLimitations && (
+						<div className="px-4 py-3 border-t border-white/[0.04] flex items-start gap-2">
+							<AlertTriangle className="size-3.5 text-amber-500 shrink-0 mt-0.5" />
+							<p className="text-[11px] text-zinc-500 leading-relaxed">{r.esrs1Climate.gapsAndLimitations}</p>
+						</div>
+					)}
+				</div>
+			</div>
+
+			{/* Supplier data quality */}
+			<div className="mb-4 grid grid-cols-3 gap-3">
+				<StatCard label="Suppliers contacted"  value={r.supplierDataQuality.totalSuppliersContacted} />
+				<StatCard label="Responses received"   value={r.supplierDataQuality.responsesReceived} />
+				<StatCard label="Completion rate"      value={`${r.supplierDataQuality.completionRatePercent}%`} />
+			</div>
+
+			{/* ESRS 2: General */}
+			<div className="mb-4">
+				<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">ESRS 2 — General disclosures</p>
+				<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] divide-y divide-white/[0.04]">
+					<div className="px-4 py-3.5">
+						<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] mb-1.5">Governance</p>
+						<p className="text-[12px] text-zinc-400 leading-relaxed">{r.esrs2General.governanceOverview}</p>
+					</div>
+					<div className="px-4 py-3.5">
+						<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] mb-1.5">Strategy & business model</p>
+						<p className="text-[12px] text-zinc-400 leading-relaxed">{r.esrs2General.strategyAndBusinessModel}</p>
+					</div>
+					<div className="px-4 py-3.5">
+						<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] mb-1.5">Material topics</p>
+						<div className="flex flex-wrap gap-1.5">
+							{r.esrs2General.materialTopics.map((t) => (
+								<span key={t} className="px-2 py-0.5 rounded text-[11px] text-zinc-400 bg-white/[0.04] border border-white/[0.07]">
+									{t}
+								</span>
+							))}
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* Recommended actions */}
+			<div>
+				<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">Recommended actions</p>
+				<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] divide-y divide-white/[0.04]">
+					{r.recommendedActions.map((action, i) => (
+						<div key={i} className="flex items-start gap-3 px-4 py-3.5">
+							<span className="shrink-0 size-5 rounded-full bg-blue-950/60 border border-blue-900/50 text-blue-400 text-[10px] font-mono font-medium flex items-center justify-center mt-0.5">
+								{i + 1}
+							</span>
+							<p className="text-[12px] text-zinc-400 leading-relaxed">{action}</p>
+						</div>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function EnterpriseApp() {
@@ -687,8 +927,11 @@ export default function EnterpriseApp() {
 	const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 	const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
 	const [scope3, setScope3] = useState<Scope3Aggregate | null>(null);
+	const [esrsReport, setEsrsReport] = useState<EsrsReport | null>(null);
+	const [esrsGenerating, setEsrsGenerating] = useState(false);
 	const [sending, setSending] = useState<string | null>(null);
 	const [page, setPage] = useState<EnterprisePage>("overview");
+	const esrsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	useEffect(() => {
 		fetch("/api/enterprise/me").then((r) => {
@@ -702,6 +945,12 @@ export default function EnterpriseApp() {
 		fetch("/api/enterprise/scope3").then((r) => r.ok ? r.json() : []).then((rows: Scope3Aggregate[]) => {
 			if (rows.length > 0) setScope3(rows[0] ?? null);
 		});
+		fetch("/api/enterprise/reports/esrs/latest").then((r) => r.ok ? r.json() : null).then((data) => {
+			if (data) setEsrsReport(data as EsrsReport);
+		});
+		return () => {
+			if (esrsPollRef.current) clearInterval(esrsPollRef.current);
+		};
 	}, []);
 
 	async function signOut() {
@@ -720,6 +969,24 @@ export default function EnterpriseApp() {
 	}
 
 	if (authState === "unauthed") return <LoginPage />;
+
+	async function generateEsrsReport() {
+		if (esrsGenerating) return;
+		setEsrsGenerating(true);
+		const triggeredAt = new Date().toISOString();
+		await fetch("/api/enterprise/reports/esrs", { method: "POST" });
+		if (esrsPollRef.current) clearInterval(esrsPollRef.current);
+		esrsPollRef.current = setInterval(async () => {
+			const r = await fetch("/api/enterprise/reports/esrs/latest");
+			if (!r.ok) return;
+			const data = await r.json() as EsrsReport;
+			if (data.generatedAt > triggeredAt) {
+				setEsrsReport(data);
+				setEsrsGenerating(false);
+				if (esrsPollRef.current) clearInterval(esrsPollRef.current);
+			}
+		}, 4000);
+	}
 
 	async function sendQuestionnaire(id: string) {
 		setSending(id);
@@ -763,6 +1030,14 @@ export default function EnterpriseApp() {
 						<FileText className="size-3.5" />
 						Questionnaires
 					</NavBtn>
+					<NavBtn
+						active={page === "esrs"}
+						onClick={() => setPage("esrs")}
+					>
+						<BarChart3 className="size-3.5" />
+						ESRS Report
+						{esrsGenerating && <Loader2 className="size-3 animate-spin text-blue-400 ml-0.5" />}
+					</NavBtn>
 				</nav>
 				<div className="ml-auto flex items-center gap-3">
 					<span className="text-[12px] text-zinc-600 truncate max-w-[160px]">
@@ -805,6 +1080,13 @@ export default function EnterpriseApp() {
 						onCreated={(q) => setQuestionnaires((prev) => [q, ...prev])}
 						onSend={sendQuestionnaire}
 						sending={sending}
+					/>
+				)}
+				{page === "esrs" && (
+					<EsrsReportPage
+						report={esrsReport}
+						generating={esrsGenerating}
+						onGenerate={generateEsrsReport}
 					/>
 				)}
 			</main>
