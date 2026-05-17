@@ -19,8 +19,8 @@ export interface GenerateOptions {
 // ── Model IDs — override via env to match what's live in your GCP project ─────
 
 const GEMINI_MODELS: Record<ModelTier, string> = {
-	pro:   Bun.env.GEMINI_PRO_MODEL   ?? "gemini-2.5-pro",
-	flash: Bun.env.GEMINI_FLASH_MODEL ?? "gemini-2.5-flash",
+	pro:   Bun.env.GEMINI_PRO_MODEL   ?? "gemini-3.1-pro-preview",
+	flash: Bun.env.GEMINI_FLASH_MODEL ?? "gemini-3.1-flash-lite",
 };
 
 // ── Provider clients (lazy) ───────────────────────────────────────────────────

@@ -15,7 +15,7 @@ Hard constraints for this codebase. Must be respected unconditionally.
 
 ### Database
 - Do not modify Drizzle-generated migration files (`src/db/migrations/`)
-- Do not modify Better Auth tables manually — let `bunx auth@latest generate` manage them
+- Do not modify Better Auth tables manually — let `bun run auth:generate` manage them
 - Do not use `bun db:generate` + `migrate` — use `bun run db:push` only
 
 ### Code
@@ -30,7 +30,7 @@ Hard constraints for this codebase. Must be respected unconditionally.
 
 ## Always Do
 
-- Generate Better Auth schema (`bunx auth@latest generate`) before first migration
+- Generate Better Auth schema (`bun run auth:generate`) before first migration
 - Run `bun run check:fix` (Biome) before committing
 - Run `bun run typecheck` (`tsgo`) before committing
 - Use Conventional Commits format — commitlint enforces this on the `commit-msg` hook
@@ -42,8 +42,8 @@ Hard constraints for this codebase. Must be respected unconditionally.
 
 | Service | Limit | Notes |
 |---------|-------|-------|
-| Gemini 3.1 Pro | RPM/TPM per project | Planner Agent; monitor quota during demos |
-| Gemini 3.1 Flash | Higher throughput | Document parsing; multimodal; preferred for volume |
+| Gemini 3.1 Pro Preview | RPM/TPM per project | Planner Agent; monitor quota during demos |
+| Gemini 3.1 Flash Lite | Higher throughput | Sub-agents, document parsing, emission extraction |
 | Featherless.ai | Per-account limits | Fallback only; activate with `LLM_PROVIDER=featherless` |
 
 ## Regulatory / Legal
@@ -55,4 +55,4 @@ Hard constraints for this codebase. Must be respected unconditionally.
 
 ---
 
-*Last updated: 2026-05-14*
+*Last updated: 2026-05-14 (post-frontend-auth-agents)*

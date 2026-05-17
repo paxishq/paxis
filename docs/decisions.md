@@ -6,6 +6,76 @@ Run `/decision` to add an entry.
 
 ---
 
+## ADR-011: Gemini Dual-Mode Auth — AI Studio Dev, Vertex AI ADC Prod
+
+**Date:** 2026-05-14
+**Status:** Accepted
+
+**Context:**
+Agents require Gemini API access. In dev, the simplest path is an AI Studio API key. In prod on a non-GCP Vultr host, using a service account + Application Default Credentials is more secure (no key in env files, IAM-controlled).
+
+**Options Considered:**
+- AI Studio API key everywhere: simple but requires a long-lived secret in prod env
+- Vertex AI ADC everywhere: requires GCP project setup even for local dev
+- Auto-detect based on whether `GEMINI_API_KEY` is set: zero friction in both environments
+
+**Decision:**
+`src/lib/llm.ts` checks `Bun.env.GEMINI_API_KEY` at runtime. If set → AI Studio (dev). If blank → `GoogleGenAI({ vertexai: true, project, location })` using ADC (prod). Model names configurable via `GEMINI_PRO_MODEL` / `GEMINI_FLASH_MODEL` env vars. Defaults: `gemini-3.1-pro-preview` (Planner) / `gemini-3.1-flash-lite` (sub-agents) — full Gemini 3.1 stack.
+
+**Consequences:**
+- ✅ Dev: one env var, no GCP project required
+- ✅ Prod: no API key in `/etc/paxis.env`; IAM-controlled via service account
+- ✅ Model names upgradeable without code changes
+- ⚠️ Non-GCP hosts (Vultr) need a service account JSON key + `GOOGLE_APPLICATION_CREDENTIALS`
+
+---
+
+## ADR-010: Google OAuth Only — Microsoft Entra Removed
+
+**Date:** 2026-05-14
+**Status:** Accepted
+
+**Context:**
+Better Auth was initially configured with both Google and Microsoft OAuth providers. Microsoft Entra adds complexity (tenant ID handling, Azure AD app registration) with no clear hackathon-phase need.
+
+**Options Considered:**
+- Keep both: more enterprise coverage but extra config surface
+- Google only: simpler, covers the demo audience, can be re-added post-hackathon
+
+**Decision:**
+Remove `microsoft` block from `src/lib/auth.ts`. `bun run auth:generate` regenerated the schema. Only Google OAuth is wired.
+
+**Consequences:**
+- ✅ Fewer env vars, less auth surface to maintain
+- ✅ `bun run auth:generate` output is cleaner
+- ⚠️ Microsoft-only enterprise users cannot log in (acceptable for hackathon)
+
+---
+
+## ADR-009: React Frontend with Dark-First Design System and Dev Auth Bypass
+
+**Date:** 2026-05-14
+**Status:** Accepted
+
+**Context:**
+The project needed working React portals (enterprise + supplier) with real API wiring, a production-grade design, and a frictionless local dev experience without requiring OAuth setup.
+
+**Options Considered:**
+- Standard light shadcn/ui defaults: fast but generic
+- Full dark redesign with custom nav and accent system: more work, distinctive
+- Dev auth bypass via real OAuth mock: complex; bypass via session middleware + seeded UUIDs: simple
+
+**Decision:**
+Both portals built with Bun fullstack HTML routes. Dark-first design (Outfit + JetBrains Mono fonts, blue enterprise / emerald supplier accent bars). Custom page-state nav replaces shadcn Tabs. `sessionMiddleware` in `src/middleware/session.ts` injects fixed-UUID dev users when `NODE_ENV !== production` and `DEV_ENTERPRISE_ID` / `DEV_SUPPLIER_ID` are set. Login pages with Google OAuth for production.
+
+**Consequences:**
+- ✅ Zero OAuth setup required for local dev
+- ✅ Both portals fully functional end-to-end without credentials
+- ✅ Production login screens are already wired and ready
+- ⚠️ Dev bypass must never activate in prod — `NODE_ENV !== production` gate is the only guard
+
+---
+
 ## ADR-008: Better Auth CLI Run via `bun` to Avoid jiti/bun-sql Incompatibility
 
 **Date:** 2026-05-14

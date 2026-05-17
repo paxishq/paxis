@@ -63,7 +63,10 @@ Set all of these in **Settings → Secrets → Actions** before running any work
 | `VULTR_INSTANCE_IP` | both workflows | Server IP address |
 | `CF_API_TOKEN` | `setup-server.yml` | Cloudflare API token for Caddy DNS-01 challenge |
 | `BETTER_AUTH_SECRET` | `setup-server.yml` | Secret for signing auth sessions (generate with `openssl rand -base64 32`) |
-| `GEMINI_API_KEY` | `setup-server.yml` | Google AI Studio API key |
+| `GOOGLE_CLOUD_PROJECT` | `setup-server.yml` | GCP project ID — Vertex AI ADC (no API key in prod) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | `setup-server.yml` | Path to GCP service account JSON key on the server (non-GCP hosts like Vultr) |
+| `GOOGLE_CLIENT_ID` | `setup-server.yml` | Google OAuth client ID for Better Auth |
+| `GOOGLE_CLIENT_SECRET` | `setup-server.yml` | Google OAuth client secret |
 | `FEATHERLESS_API_KEY` | `setup-server.yml` | Featherless.ai API key (optional fallback) |
 
 ## Connect to Server
@@ -95,19 +98,21 @@ ssh paxis@getpaxis.com "chmod +x ~/app/paxis && sudo systemctl restart paxis"
 
 > Never commit values. On server: `/etc/paxis.env` (600, root only).
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| `DATABASE_URL` | Yes | Postgres connection string (localhost) |
-| `BETTER_AUTH_SECRET` | Yes | Secret for signing sessions |
-| `LLM_PROVIDER` | No | `gemini` (default) or `featherless` |
-| `GEMINI_API_KEY` | Yes | Google AI Studio API key |
-| `FEATHERLESS_API_KEY` | No | Featherless.ai API key (fallback) |
-| `FEATHERLESS_MODEL` | No | Featherless model ID (default: `mistralai/Mistral-Small-3.2-24B-Instruct-2506`) |
-| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
-| `MICROSOFT_CLIENT_ID` | No | Microsoft Entra ID client ID |
-| `MICROSOFT_CLIENT_SECRET` | No | Microsoft Entra ID client secret |
-| `MICROSOFT_TENANT_ID` | No | Client's Azure AD tenant ID |
+| Key | Dev | Prod | Description |
+|-----|-----|------|-------------|
+| `DATABASE_URL` | Yes | Yes | Postgres connection string |
+| `BETTER_AUTH_SECRET` | Yes | Yes | Secret for signing sessions |
+| `GOOGLE_CLIENT_ID` | No | Yes | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | No | Yes | Google OAuth client secret |
+| `LLM_PROVIDER` | No | No | `gemini` (default) or `featherless` |
+| `GEMINI_API_KEY` | Yes | — | AI Studio key (dev only; leave blank in prod to use Vertex AI ADC) |
+| `GEMINI_PRO_MODEL` | No | No | Override Planner model (default: `gemini-3.1-pro-preview`) |
+| `GEMINI_FLASH_MODEL` | No | No | Override sub-agent model (default: `gemini-3.1-flash-lite`) |
+| `GOOGLE_CLOUD_PROJECT` | — | Yes | GCP project ID for Vertex AI ADC |
+| `GOOGLE_CLOUD_LOCATION` | — | No | Vertex AI region (default: `us-central1`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | — | Yes | Path to GCP service account JSON (non-GCP hosts) |
+| `FEATHERLESS_API_KEY` | No | No | Featherless.ai API key (fallback) |
+| `FEATHERLESS_MODEL` | No | No | Featherless model ID (default: `mistralai/Mistral-Small-3.2-24B-Instruct-2506`) |
 
 ## Health Check
 
@@ -115,4 +120,4 @@ ssh paxis@getpaxis.com "chmod +x ~/app/paxis && sudo systemctl restart paxis"
 
 ---
 
-*Last updated: 2026-05-14*
+*Last updated: 2026-05-14 (post-frontend-auth-agents)*

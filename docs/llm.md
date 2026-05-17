@@ -60,17 +60,18 @@
 │   │       ├── ai-inventory.ts    # GET /, POST /, PATCH /:id, DELETE /:id
 │   │       └── carbon.ts          # GET / (?scope=), POST / (manual), POST /parse (stub)
 │   ├── agents/                    # Six specialized agents
-│   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro
-│   │   ├── intake.ts              # Questionnaire routing + dispatch
-│   │   ├── ai-act.ts              # EU AI Act inventory & risk classification
-│   │   ├── carbon.ts              # Scope 1 & 2 emissions ledger
-│   │   ├── supply-chain.ts        # Scope 3 orchestration
+│   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro Preview
+│   │   ├── intake.ts              # IMPLEMENTED — maps questionnaire questions to existing supplier data
+│   │   ├── ai-act.ts              # EU AI Act inventory & risk classification (stub)
+│   │   ├── carbon.ts              # Scope 1 & 2 emissions ledger (stub)
+│   │   ├── supply-chain.ts        # IMPLEMENTED — aggregates Scope 3 from completed responses
 │   │   ├── risk-deadline.ts       # Compliance calendar & alerts
 │   │   └── esrs-report.ts         # Audit-ready ESRS output
 │   ├── lib/
-│   │   ├── llm.ts                 # LLM provider abstraction (Gemini | Featherless)
+│   │   ├── llm.ts                 # LLM provider abstraction (Gemini AI Studio / Vertex AI ADC | Featherless)
+│   │   ├── auth-client.ts         # Better Auth React client (frontend signIn/signOut)
 │   │   ├── audit.ts               # writeAudit() — sole write path to audit_log
-│   │   ├── auth.ts                # Better Auth instance + Drizzle adapter config
+│   │   ├── auth.ts                # Better Auth instance + Drizzle adapter + Google OAuth only
 │   │   └── db.ts                  # Drizzle + Bun native SQL instance
 │   ├── db/
 │   │   ├── schema.ts              # Drizzle schema — domain tables, enums, cross-schema relations
@@ -106,7 +107,7 @@ DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test
 bun run auth:generate
 ```
 
-Copy `.env` and set at minimum `GEMINI_API_KEY`. `BETTER_AUTH_SECRET` defaults to a dev placeholder in compose — override it in `.env` for any auth testing.
+Copy `.env` and set `GEMINI_API_KEY` (from aistudio.google.com) for local dev. The dev auth bypass activates automatically when `NODE_ENV !== production` — no Google OAuth credentials needed locally. Set `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` only when testing real OAuth flows.
 
 ---
 
@@ -114,11 +115,11 @@ Copy `.env` and set at minimum `GEMINI_API_KEY`. `BETTER_AUTH_SECRET` defaults t
 
 | Agent | File | Status | Role |
 |-------|------|--------|------|
-| **Planner** | `agents/planner.ts` | **Implemented** | Coordinates all agents; Gemini 3.1 Pro at temp 0.2; Zod-validated JSON plan; dynamic dispatch |
-| **Intake** | `agents/intake.ts` | Stub | Parses incoming questionnaires; maps to existing data; dispatches to suppliers |
+| **Planner** | `agents/planner.ts` | **Implemented** | Coordinates all agents; Gemini 3.1 Pro Preview at temp 0.2; Zod-validated JSON plan; dynamic dispatch |
+| **Intake** | `agents/intake.ts` | **Implemented** | Fetches questionnaire + supplier carbon/AI data; Gemini 3.1 Flash Lite maps existing data to questions; upserts draft response; marks questionnaire in_progress |
 | **EU AI Act** | `agents/ai-act.ts` | Stub | Discovers and inventories AI tools; classifies by risk tier; generates documentation |
 | **Carbon** | `agents/carbon.ts` | Stub | Ingests energy bills via Gemini multimodal; calculates Scope 1 & 2 |
-| **Supply Chain** | `agents/supply-chain.ts` | Stub | Tracks Scope 3 collection; manages supplier requests; aggregates figures |
+| **Supply Chain** | `agents/supply-chain.ts` | **Implemented** | Aggregates completed questionnaire responses; Gemini 3.1 Flash Lite extracts emission figures per supplier; upserts `scope3_aggregates` |
 | **Risk & Deadline** | `agents/risk-deadline.ts` | Stub | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
 | **ESRS Report** | `agents/esrs-report.ts` | Stub | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 
@@ -139,10 +140,26 @@ export interface AgentContext {
 
 All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env var — never hardcode provider SDKs in agent files.
 
+### Gemini auth (auto-detected)
+
+| Env var | When set | Effect |
+|---------|----------|--------|
+| `GEMINI_API_KEY` | Dev | AI Studio (API key). Get one at aistudio.google.com |
+| `GOOGLE_CLOUD_PROJECT` | Prod | Vertex AI ADC — triggered when `GEMINI_API_KEY` is blank |
+| `GOOGLE_CLOUD_LOCATION` | Prod | Vertex AI region (default: `us-central1`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Prod (non-GCP host) | Path to service account JSON key file |
+
+### All LLM env vars
+
 | Env var | Default | Values |
 |---------|---------|--------|
 | `LLM_PROVIDER` | `gemini` | `gemini` \| `featherless` |
-| `GEMINI_API_KEY` | — | Google AI Studio API key |
+| `GEMINI_API_KEY` | — | AI Studio key (dev); leave blank for Vertex AI ADC (prod) |
+| `GEMINI_PRO_MODEL` | `gemini-3.1-pro-preview` | Override the Planner model ID |
+| `GEMINI_FLASH_MODEL` | `gemini-3.1-flash-lite` | Override the sub-agent / document model ID |
+| `GOOGLE_CLOUD_PROJECT` | — | GCP project ID (prod Vertex AI) |
+| `GOOGLE_CLOUD_LOCATION` | `us-central1` | Vertex AI region |
+| `GOOGLE_APPLICATION_CREDENTIALS` | — | Service account JSON path (non-GCP hosts) |
 | `FEATHERLESS_API_KEY` | — | Featherless.ai API key |
 | `FEATHERLESS_MODEL` | `mistralai/Mistral-Small-3.2-24B-Instruct-2506` | Any Featherless model ID |
 
@@ -221,4 +238,4 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 
 ---
 
-*Last updated: 2026-05-14 (post-agent-wiring)*
+*Last updated: 2026-05-14 (post-frontend-auth-agents)*

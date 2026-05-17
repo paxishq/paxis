@@ -59,14 +59,15 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | `src/app.ts` | Hono application — all API routes, auth handler, session middleware |
 | `src/routes/enterprise/` | Enterprise dashboard API handlers (Hono) |
 | `src/routes/supplier/` | Supplier portal API handlers (Hono) |
-| `src/agents/planner.ts` | Coordinates all agents; maintains shared compliance state; Gemini 3.1 Pro |
-| `src/agents/intake.ts` | Parses questionnaires; maps to existing data; dispatches to suppliers |
+| `src/agents/planner.ts` | Coordinates all agents; maintains shared compliance state; Gemini 3.1 Pro Preview |
+| `src/agents/intake.ts` | **Implemented** — fetches questionnaire + supplier carbon/AI data; Gemini Flash maps existing data to questions; upserts draft response |
 | `src/agents/ai-act.ts` | Discovers AI tools; classifies by EU AI Act risk tier; generates documentation |
 | `src/agents/carbon.ts` | Ingests energy bills via Gemini multimodal; calculates Scope 1 & 2 |
-| `src/agents/supply-chain.ts` | Tracks Scope 3 collection; manages supplier requests; aggregates figures |
+| `src/agents/supply-chain.ts` | **Implemented** — aggregates completed questionnaire responses; Gemini Flash extracts emission figures; writes to `scope3_aggregates` |
 | `src/agents/risk-deadline.ts` | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
 | `src/agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
-| `src/lib/llm.ts` | LLM provider abstraction — Gemini or Featherless via `LLM_PROVIDER` |
+| `src/lib/llm.ts` | LLM provider abstraction — Gemini (AI Studio dev / Vertex AI ADC prod) or Featherless via `LLM_PROVIDER` |
+| `src/lib/auth-client.ts` | Better Auth React client — used by frontend portals for `signIn.social` and `signOut` |
 | `src/lib/audit.ts` | `writeAudit()` — sole write path to `audit_log`; used by all agents; never called from routes |
 | `src/lib/auth.ts` | Better Auth instance — Drizzle adapter, social providers, custom user fields |
 | `src/lib/db.ts` | Drizzle + Bun native SQL connection; reads `DATABASE_URL`; exports `db` |
@@ -84,12 +85,15 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | Process boundary | `Bun.serve()` | Unix socket, port binding, binary compilation — keeps infra simple |
 | API routing | Hono (inside `Bun.serve()`) | Typed middleware, RPC, clean route composition — mounted via `routes: { "/api/*": app.fetch }` |
 | Frontend serving | `Bun.serve()` HTML routes | Static React apps served from the same process; no separate server |
+| Frontend design | Dark-first, shadcn/ui new-york, Outfit + JetBrains Mono | Production-grade B2B aesthetic; blue accent (enterprise) / emerald accent (supplier) |
 | Database | PostgreSQL 18 + Drizzle (`drizzle-orm/bun-sql`) | ACID, audit log integrity, Drizzle type safety |
-| Auth | Better Auth | Framework-agnostic handler works with Hono; role-based enterprise/supplier access |
+| Auth | Better Auth + Google OAuth only | Framework-agnostic handler works with Hono; role-based enterprise/supplier access; no Microsoft |
 | Auth schema | Generated (`bun run auth:generate`) | `@better-auth/cli` installed locally and run via `bun` to avoid jiti/bun-sql incompatibility |
-| Agent orchestration | Gemini 3.1 Pro (Planner) | Multi-step reasoning for coordinating 6 specialized agents |
-| Document parsing | Gemini 3.1 Flash | Multimodal: invoices, energy bills, questionnaires in multiple languages |
-| LLM abstraction | `src/lib/llm.ts` + `LLM_PROVIDER` env var | Swap providers without touching agent code |
+| Dev auth bypass | Session middleware route-sniff, fixed-UUID seed records | Zero-friction local dev without OAuth; gated on `NODE_ENV !== production` |
+| Agent orchestration | Gemini 3.1 Pro Preview (Planner) | Latest greatest for multi-step agentic reasoning; coordinating 6 specialized agents |
+| Agent intelligence | Gemini 3.1 Flash Lite (sub-agents) | Latest Gemini 3.1 generation for document parsing, emission extraction, question mapping |
+| Gemini auth | AI Studio API key (dev) / Vertex AI ADC (prod) | `GEMINI_API_KEY` set → AI Studio; blank → Vertex AI ADC + `GOOGLE_CLOUD_PROJECT` |
+| LLM abstraction | `src/lib/llm.ts` + `LLM_PROVIDER` env var | Swap providers without touching agent code; model names overridable via env |
 | Infra | Vultr VX1 + OpenTofu + Caddy | Full control; EU data residency; no managed lock-in; no Docker |
 | Audit log | Append-only Postgres table | Immutable record is the compliance product; every agent action logged |
 | IaC | OpenTofu | Native Vultr provider; KMS state encryption; open-source Terraform fork |
@@ -100,10 +104,9 @@ Full decision records: `docs/decisions.md`
 
 | Service | Purpose | Auth method |
 |---------|---------|-------------|
-| Google AI (Gemini 3.1 Pro/Flash) | Agent orchestration + document parsing | `GEMINI_API_KEY` |
+| Google AI (Gemini 3.1 Pro Preview / 2.5 Flash) | Agent orchestration + document parsing | Dev: `GEMINI_API_KEY` (AI Studio) · Prod: Vertex AI ADC (`GOOGLE_CLOUD_PROJECT` + service account) |
 | Featherless.ai | LLM fallback (OpenAI-compatible) | `FEATHERLESS_API_KEY` |
 | Google OAuth | Enterprise/supplier SSO | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` |
-| Microsoft Entra ID | Enterprise SSO | `MICROSOFT_CLIENT_ID` + `MICROSOFT_CLIENT_SECRET` + `MICROSOFT_TENANT_ID` |
 | Cloudflare DNS | DNS-01 TLS challenge for Caddy | `CF_API_TOKEN` |
 | Vultr | VPS hosting | OpenTofu provider; `SERVER_SSH_KEY` for GitHub Actions |
 
@@ -118,4 +121,4 @@ Full decision records: `docs/decisions.md`
 
 ---
 
-*Last updated: 2026-05-14 (post-agent-wiring)*
+*Last updated: 2026-05-14 (post-frontend-auth-agents)*
