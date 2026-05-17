@@ -288,6 +288,77 @@ function LoginPage() {
 	);
 }
 
+// ── View Response Sheet ───────────────────────────────────────────────────────
+
+function ViewResponseSheet({ questionnaireId }: { questionnaireId: string }) {
+	const [open, setOpen] = useState(false);
+	const [data, setData] = useState<QuestionnaireWithResponse | null>(null);
+
+	useEffect(() => {
+		if (!open) return;
+		fetch(`/api/supplier/questionnaires/${questionnaireId}`)
+			.then((r) => r.json())
+			.then((d: QuestionnaireWithResponse) => setData(d));
+	}, [open, questionnaireId]);
+
+	function formatAnswer(value: unknown): string {
+		if (value === null || value === undefined) return "—";
+		if (typeof value === "boolean") return value ? "Yes" : "No";
+		if (value === "yes") return "Yes";
+		if (value === "no") return "No";
+		return String(value);
+	}
+
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => setOpen(true)}
+				className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 hover:text-emerald-400 transition-colors"
+			>
+				<CheckCircle2 className="size-3.5" />
+				Submitted
+			</button>
+			<Sheet open={open} onOpenChange={setOpen}>
+				<SheetContent className="w-full sm:max-w-lg overflow-y-auto flex flex-col gap-0 p-0">
+					<SheetHeader className="px-6 py-5 border-b border-white/[0.06]">
+						<SheetTitle className="text-[14px] font-semibold text-white">
+							{data?.title ?? "Loading…"}
+						</SheetTitle>
+						<p className="text-[12px] text-zinc-600 mt-0.5">
+							Submitted response — read only
+						</p>
+					</SheetHeader>
+					<div className="flex-1 overflow-y-auto px-6 py-5">
+						{data ? (
+							<div className="space-y-4">
+								{data.questions.map((q, i) => {
+									const ans = data.response?.answers[q.id];
+									return (
+										<div key={q.id} className="space-y-1.5">
+											<p className="text-[12px] font-medium text-zinc-400">
+												<span className="font-mono text-zinc-600 mr-1.5">{String(i + 1).padStart(2, "0")}</span>
+												{q.text}
+											</p>
+											<div className="rounded-md bg-white/[0.03] border border-white/[0.06] px-3 py-2 text-[13px] text-zinc-200">
+												{formatAnswer(ans)}
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						) : (
+							<div className="flex items-center justify-center h-32">
+								<p className="text-[13px] text-zinc-600">Loading…</p>
+							</div>
+						)}
+					</div>
+				</SheetContent>
+			</Sheet>
+		</>
+	);
+}
+
 // ── Respond Sheet ─────────────────────────────────────────────────────────────
 
 function RespondSheet({
@@ -1195,7 +1266,7 @@ export default function SupplierApp() {
 													<RespondSheet questionnaireId={q.id} onDone={loadQuestionnaires} />
 												)}
 												{q.status === "completed" && (
-													<span className="text-[11px] text-zinc-600 font-medium">Submitted</span>
+													<ViewResponseSheet questionnaireId={q.id} />
 												)}
 											</td>
 										</tr>
