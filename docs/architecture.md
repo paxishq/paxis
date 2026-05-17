@@ -42,13 +42,14 @@ Browser
 
 A typical enterprise Scope 3 questionnaire dispatch:
 
-1. Enterprise admin POSTs to `/api/enterprise/questionnaires` — Hono middleware validates Better Auth session
-2. Intake Agent parses the questionnaire, maps questions to existing supplier data, identifies gaps
-3. Planner Agent determines which supplier nodes need to respond and schedules requests
-4. Suppliers receive questionnaire via portal; respond through `/api/supplier/*` routes
-5. Supply Chain Agent aggregates responses, calculates Scope 3 figure, writes to `scope3_aggregates`
-6. ESRS Report Agent assembles audit-ready output; enterprise downloads PDF
-7. Every agent action writes an append-only record to `audit_log` before returning
+1. Enterprise admin POSTs to `/api/enterprise/questionnaires/:id/send` — Hono session middleware validates Better Auth session; route updates DB status to `sent`
+2. Route fires `runPlan({ type: "questionnaire_dispatched", ... }).catch(console.error)` and **returns HTTP response immediately** — agent runs in the background
+3. Planner Agent calls Gemini 3.1 Pro to produce a JSON execution plan; dispatches to Intake and other sub-agents in sequence
+4. Supplier receives questionnaire via `/api/supplier/questionnaires`; submits via POST `/:id/respond` with `{ submit: true }`
+5. Supplier route fires `runPlan({ type: "questionnaire_responded", ... })` fire-and-forget; status updated to `completed`
+6. Planner dispatches Supply Chain Agent to aggregate responses and write to `scope3_aggregates`
+7. ESRS Report Agent assembles audit-ready output on demand
+8. **Every agent step** calls `writeAudit()` via `src/lib/audit.ts` before returning — append-only record in `audit_log`
 
 ## Package Responsibilities
 
@@ -66,6 +67,7 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | `src/agents/risk-deadline.ts` | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
 | `src/agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 | `src/lib/llm.ts` | LLM provider abstraction — Gemini or Featherless via `LLM_PROVIDER` |
+| `src/lib/audit.ts` | `writeAudit()` — sole write path to `audit_log`; used by all agents; never called from routes |
 | `src/lib/auth.ts` | Better Auth instance — Drizzle adapter, social providers, custom user fields |
 | `src/lib/db.ts` | Drizzle + Bun native SQL connection; reads `DATABASE_URL`; exports `db` |
 | `src/db/schema.ts` | Drizzle schema — domain tables, enums, cross-schema relations to `user` |
@@ -116,4 +118,4 @@ Full decision records: `docs/decisions.md`
 
 ---
 
-*Last updated: 2026-05-14*
+*Last updated: 2026-05-14 (post-agent-wiring)*

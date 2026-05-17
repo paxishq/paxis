@@ -50,8 +50,15 @@
 │   │                              # routes: { "/api/*": app.fetch } — delegates all API to Hono
 │   ├── app.ts                     # Hono application — all API routes registered here
 │   ├── routes/
-│   │   ├── enterprise/            # Enterprise dashboard API routes (Hono handlers)
-│   │   └── supplier/              # Supplier portal API routes (Hono handlers)
+│   │   ├── enterprise/
+│   │   │   ├── index.ts           # GET /me, GET /scope3; mounts suppliers + questionnaires
+│   │   │   ├── suppliers.ts       # GET /, POST /, DELETE /:supplierId
+│   │   │   └── questionnaires.ts  # GET / (?status=), POST /, GET /:id, POST /:id/send
+│   │   └── supplier/
+│   │       ├── index.ts           # GET /me; mounts questionnaires + ai-inventory + carbon
+│   │       ├── questionnaires.ts  # GET /, GET /:id (with response), POST /:id/respond
+│   │       ├── ai-inventory.ts    # GET /, POST /, PATCH /:id, DELETE /:id
+│   │       └── carbon.ts          # GET / (?scope=), POST / (manual), POST /parse (stub)
 │   ├── agents/                    # Six specialized agents
 │   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro
 │   │   ├── intake.ts              # Questionnaire routing + dispatch
@@ -62,6 +69,7 @@
 │   │   └── esrs-report.ts         # Audit-ready ESRS output
 │   ├── lib/
 │   │   ├── llm.ts                 # LLM provider abstraction (Gemini | Featherless)
+│   │   ├── audit.ts               # writeAudit() — sole write path to audit_log
 │   │   ├── auth.ts                # Better Auth instance + Drizzle adapter config
 │   │   └── db.ts                  # Drizzle + Bun native SQL instance
 │   ├── db/
@@ -104,17 +112,26 @@ Copy `.env` and set at minimum `GEMINI_API_KEY`. `BETTER_AUTH_SECRET` defaults t
 
 ## The Six Agents
 
-| Agent | File | Role |
-|-------|------|------|
-| **Planner** | `agents/planner.ts` | Coordinates all agents; maintains shared compliance state; Gemini 3.1 Pro |
-| **Intake** | `agents/intake.ts` | Parses incoming questionnaires; maps to existing data; dispatches to suppliers |
-| **EU AI Act** | `agents/ai-act.ts` | Discovers and inventories AI tools; classifies by risk tier; generates documentation |
-| **Carbon** | `agents/carbon.ts` | Ingests energy bills via Gemini multimodal; calculates Scope 1 & 2 |
-| **Supply Chain** | `agents/supply-chain.ts` | Tracks Scope 3 collection; manages supplier requests; aggregates figures |
-| **Risk & Deadline** | `agents/risk-deadline.ts` | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
-| **ESRS Report** | `agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
+| Agent | File | Status | Role |
+|-------|------|--------|------|
+| **Planner** | `agents/planner.ts` | **Implemented** | Coordinates all agents; Gemini 3.1 Pro at temp 0.2; Zod-validated JSON plan; dynamic dispatch |
+| **Intake** | `agents/intake.ts` | Stub | Parses incoming questionnaires; maps to existing data; dispatches to suppliers |
+| **EU AI Act** | `agents/ai-act.ts` | Stub | Discovers and inventories AI tools; classifies by risk tier; generates documentation |
+| **Carbon** | `agents/carbon.ts` | Stub | Ingests energy bills via Gemini multimodal; calculates Scope 1 & 2 |
+| **Supply Chain** | `agents/supply-chain.ts` | Stub | Tracks Scope 3 collection; manages supplier requests; aggregates figures |
+| **Risk & Deadline** | `agents/risk-deadline.ts` | Stub | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
+| **ESRS Report** | `agents/esrs-report.ts` | Stub | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 
-All agents share a single immutable audit log written to Postgres. Every classification, calculation, and agent action is an append-only record.
+All agents share a single immutable audit log written to Postgres via `src/lib/audit.ts`. Every agent function calls `writeAudit()` before returning — stubs included. Routes fire agents with `runPlan(...).catch(console.error)` and return the HTTP response immediately; agent orchestration runs in the background.
+
+`AgentContext` is exported from `agents/intake.ts` and imported by all other agents:
+```typescript
+export interface AgentContext {
+  enterpriseId?: string;
+  supplierId?: string;
+  [key: string]: unknown;
+}
+```
 
 ---
 
@@ -144,9 +161,11 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 - Better Auth schema changes via `bun run auth:generate` only — never hand-edit `src/db/auth-schema.ts`
 - All API routes are Hono handlers registered in `src/app.ts` or imported route files
 - kebab-case filenames; PascalCase types and React components
-- All agent functions must write to the audit log before returning — no silent failures
+- All agent functions must write to the audit log before returning — no silent failures; stubs must also call `writeAudit()`
+- Routes dispatch agents fire-and-forget: `runPlan(...).catch(console.error)` — return HTTP response immediately; never await agent calls in route handlers
 - Document parsing always via Gemini Flash — never attempt to parse PDF/image with text-only models
 - Zod validation on all LLM responses — never trust raw model output
+- Zod 4 API: use `z.uuid()` not deprecated `z.string().uuid()`; use `z.iso.datetime()` for datetime strings
 - No deprecated APIs — check TypeScript diagnostics before using any `@deprecated` symbol
 
 ---
@@ -202,4 +221,4 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 
 ---
 
-*Last updated: 2026-05-14*
+*Last updated: 2026-05-14 (post-agent-wiring)*
