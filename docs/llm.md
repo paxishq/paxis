@@ -72,6 +72,25 @@
 
 ---
 
+## Local Development
+
+`compose.yml` provides Postgres for local dev and testing. The production server runs Bun directly — no Docker.
+
+```sh
+# start dev DB + app (hot reload)
+docker compose up
+
+# start test DB only (for bun test)
+docker compose up db-test -d
+
+# run tests against the test DB
+DATABASE_URL=postgres://paxis:paxis@localhost:5433/paxis_test bun test
+```
+
+Copy `.env` and set at minimum `GEMINI_API_KEY`. `BETTER_AUTH_SECRET` defaults to a dev placeholder in compose — override it in `.env` for any auth testing.
+
+---
+
 ## The Six Agents
 
 | Agent | File | Role |

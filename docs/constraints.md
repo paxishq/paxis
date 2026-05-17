@@ -8,7 +8,7 @@ Hard constraints for this codebase. Must be respected unconditionally.
 
 ### Architecture
 - Do not write auth logic in route handlers — middleware handles it
-- Do not add Docker or managed cloud services
+- Do not add Docker or managed cloud services in production — `compose.yml` is local dev only
 - Do not call LLM APIs directly in agent files — always route through `src/lib/llm.ts`
 - Do not write to the audit log outside of agent functions — audit integrity is the product
 - Do not expose `DATABASE_URL` or Postgres credentials in logs or API responses
