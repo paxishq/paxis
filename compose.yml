@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: paxis
       POSTGRES_DB: paxis
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql
     ports:
       - "15151:5432"
     healthcheck:
