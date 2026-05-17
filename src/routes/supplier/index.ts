@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { db } from "../../lib/db";
 import { suppliers } from "../../db/schema";
+import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 import { requireAuth, requireSupplier } from "../../middleware/session";
 import aiInventoryRoutes from "./ai-inventory";
@@ -13,18 +13,18 @@ const supplier = new Hono<{ Variables: AuthVariables }>();
 supplier.use("*", requireAuth, requireSupplier);
 
 supplier.get("/me", async (c) => {
-	const user = c.get("user")!;
-	if (!user.supplierId)
-		return c.json({ error: "Not linked to a supplier" }, 403);
+  const user = c.get("user")!;
+  if (!user.supplierId)
+    return c.json({ error: "Not linked to a supplier" }, 403);
 
-	const [sup] = await db
-		.select()
-		.from(suppliers)
-		.where(eq(suppliers.id, user.supplierId));
+  const [sup] = await db
+    .select()
+    .from(suppliers)
+    .where(eq(suppliers.id, user.supplierId));
 
-	if (!sup) return c.json({ error: "Supplier not found" }, 404);
+  if (!sup) return c.json({ error: "Supplier not found" }, 404);
 
-	return c.json(sup);
+  return c.json(sup);
 });
 
 supplier.route("/questionnaires", questionnaireRoutes);
