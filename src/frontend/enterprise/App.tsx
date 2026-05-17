@@ -476,11 +476,11 @@ function NewQuestionnaireDialog({
 					</Button>
 				)}
 			</DialogTrigger>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
+			<DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+				<DialogHeader className="shrink-0">
 					<DialogTitle className="text-[14px] font-semibold">New CSRD questionnaire</DialogTitle>
 				</DialogHeader>
-				<form onSubmit={handleSubmit} className="space-y-3 pt-1">
+				<form onSubmit={handleSubmit} className="flex flex-col gap-3 pt-1 overflow-y-auto min-h-0">
 					<div className="space-y-1.5">
 						<Label className="text-[12px] text-zinc-400">Title</Label>
 						<Input
@@ -515,19 +515,19 @@ function NewQuestionnaireDialog({
 							className="h-8 text-sm"
 						/>
 					</div>
-					<div className="rounded-md border border-white/[0.05] bg-white/[0.02] p-3">
+					<div className="rounded-md border border-white/[0.05] bg-white/[0.02] p-3 overflow-hidden">
 						<p className="text-[11px] font-medium text-zinc-500 mb-2">
 							Includes {DEFAULT_QUESTIONS.length} standard CSRD questions
 						</p>
-						<ul className="space-y-1">
+						<ul className="space-y-1 overflow-hidden">
 							{DEFAULT_QUESTIONS.map((q) => (
-								<li key={q.id} className="text-[11px] text-zinc-600 truncate">
+								<li key={q.id} className="text-[11px] text-zinc-600 truncate min-w-0">
 									<span className="text-zinc-700 mr-1">·</span>{q.text}
 								</li>
 							))}
 						</ul>
 					</div>
-					<DialogFooter className="pt-2">
+					<DialogFooter className="pt-2 shrink-0">
 						<Button type="submit" size="sm" disabled={loading || !supplierId} className="h-8 text-[13px]">
 							{loading ? "Creating…" : "Create questionnaire"}
 						</Button>
