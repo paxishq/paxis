@@ -1,6 +1,9 @@
 [run]
 bun = true
 
+[serve.static]
+plugins = ["bun-plugin-tailwind"]
+
 [test]
 preload = ["./src/test-setup.ts"]
 coverage = true
