@@ -1418,6 +1418,7 @@ export default function EnterpriseApp() {
 		});
 		fetch("/api/enterprise/risk/latest").then((r) => r.ok ? r.json() : null).then((data) => {
 			if (data) setRiskAssessment(data as RiskAssessment);
+			else assessRisk();
 		});
 		return () => {
 			if (esrsPollRef.current) clearInterval(esrsPollRef.current);

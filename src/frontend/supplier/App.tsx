@@ -1262,7 +1262,7 @@ export default function SupplierApp() {
 											<td className="py-3"><StatusChip status={q.status} /></td>
 											<td className="py-3 font-mono text-[12px] text-zinc-600">{formatDate(q.dueAt)}</td>
 											<td className="py-3 text-right">
-												{(q.status === "sent" || q.status === "in_progress") && (
+												{(q.status === "sent" || q.status === "in_progress" || q.status === "overdue") && (
 													<RespondSheet questionnaireId={q.id} onDone={loadQuestionnaires} />
 												)}
 												{q.status === "completed" && (

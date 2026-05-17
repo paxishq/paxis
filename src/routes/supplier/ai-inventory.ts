@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { runPlan } from "../../agents/planner";
 import { db } from "../../lib/db";
 import { aiInventories } from "../../db/schema";
 import type { AuthVariables } from "../../middleware/session";
@@ -45,7 +46,7 @@ router.post("/", zValidator("json", createSchema), async (c) => {
 
 	if (!entry) return c.json({ error: "Failed to create entry" }, 500);
 
-	// TODO: trigger AI Act Agent for validation and audit log
+	runPlan({ type: "ai_inventory_updated", inventoryId: entry.id, supplierId: user.supplierId }).catch(console.error);
 
 	return c.json(entry, 201);
 });
@@ -72,6 +73,8 @@ router.patch("/:id", zValidator("json", updateSchema), async (c) => {
 		.returning();
 
 	if (!updated) return c.json({ error: "Not found" }, 404);
+
+	runPlan({ type: "ai_inventory_updated", inventoryId: updated.id, supplierId: user.supplierId }).catch(console.error);
 
 	return c.json(updated);
 });
