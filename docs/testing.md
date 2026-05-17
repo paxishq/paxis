@@ -19,7 +19,14 @@ External LLM calls (Gemini, Featherless) are mocked at the `src/lib/llm.ts` abst
 
 ## Local Test DB
 
-Tests run against `paxis_test` on the same `db` service as local dev (port 15151). One Postgres instance, two database names. `test-setup.ts` creates `paxis_test` on first run if it doesn't exist.
+Tests run against `paxis_test` on the same `db` service as local dev (port 15151). One Postgres instance, two database names.
+
+**`paxis_test` must be created manually** — `test-setup.ts` does not create the database, only validates `DATABASE_URL` contains `"test"` and runs migrations:
+
+```sh
+# one-time: create the test database
+docker exec paxis-db-1 psql -U paxis -c "CREATE DATABASE paxis_test OWNER paxis;"
+```
 
 Start the DB before running tests:
 
@@ -29,9 +36,9 @@ docker compose up db -d
 
 ## test-setup.ts
 
-Loaded via `bunfig.toml` preload. Creates `paxis_test` if needed, runs migrations, and truncates between tests.
+Loaded via `bunfig.toml` preload. Validates that `DATABASE_URL` contains `"test"` (throws otherwise) and sets test environment variables.
 
-**Critical:** `DATABASE_URL` must contain `"test"` — `test-setup.ts` throws otherwise.
+**Critical:** `DATABASE_URL` must contain `"test"` — `test-setup.ts` throws otherwise. After creating `paxis_test`, run `bun run db:push` with the test `DATABASE_URL` to apply the schema.
 
 ## Running Tests
 
@@ -59,6 +66,8 @@ DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test src/agen
 - No mocking the database — tests hit the real test Postgres instance
 - Mock external LLM calls at `src/lib/llm.ts` — never in individual agent files
 - Agent test names should reference domain objects: `it('writes audit log entry when supplier responds')`
+- **`mock.module` leaks across test files** in the same Bun test run. Agent test files that mock `../lib/llm` must include the real `extractJson` implementation in the mock object — do not use an identity function or omit it, or `llm.test.ts` will fail when it runs after agent tests
+- Dynamic imports (`const { runX } = await import("./x")`) must come **after** `mock.module()` calls to pick up the mock
 
 ## What Must Always Be Tested
 
@@ -70,4 +79,4 @@ DATABASE_URL=postgres://paxis:paxis@localhost:15151/paxis_test bun test src/agen
 
 ---
 
-*Last updated: 2026-05-14*
+*Last updated: 2026-05-16 (25 tests; added carbon + esrs-report test files; mock.module leak fix documented; paxis_test creation documented)*

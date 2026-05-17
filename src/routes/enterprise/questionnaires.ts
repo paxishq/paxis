@@ -2,12 +2,13 @@ import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { runPlan } from "../../agents/planner";
+import { dispatchPlan } from "../../agents/planner";
 import {
   enterpriseSuppliers,
   questionnaireResponses,
   questionnaires,
 } from "../../db/schema";
+import { authIdToUuid } from "../../lib/auth-helpers";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 
@@ -21,7 +22,8 @@ const listQuerySchema = z.object({
 
 router.get("/", zValidator("query", listQuerySchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const { status } = c.req.valid("query");
@@ -32,7 +34,7 @@ router.get("/", zValidator("query", listQuerySchema), async (c) => {
     .set({ status: "overdue", updatedAt: new Date() })
     .where(
       and(
-        eq(questionnaires.enterpriseId, user.enterpriseId),
+        eq(questionnaires.enterpriseId, enterpriseId),
         inArray(questionnaires.status, ["sent", "in_progress"]),
         lt(questionnaires.dueAt, new Date()),
       ),
@@ -44,10 +46,10 @@ router.get("/", zValidator("query", listQuerySchema), async (c) => {
     .where(
       status
         ? and(
-            eq(questionnaires.enterpriseId, user.enterpriseId),
+            eq(questionnaires.enterpriseId, enterpriseId),
             eq(questionnaires.status, status),
           )
-        : eq(questionnaires.enterpriseId, user.enterpriseId),
+        : eq(questionnaires.enterpriseId, enterpriseId),
     )
     .orderBy(desc(questionnaires.createdAt));
 
@@ -71,7 +73,8 @@ const createSchema = z.object({
 
 router.post("/", zValidator("json", createSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const body = c.req.valid("json");
@@ -81,7 +84,7 @@ router.post("/", zValidator("json", createSchema), async (c) => {
     .from(enterpriseSuppliers)
     .where(
       and(
-        eq(enterpriseSuppliers.enterpriseId, user.enterpriseId),
+        eq(enterpriseSuppliers.enterpriseId, enterpriseId),
         eq(enterpriseSuppliers.supplierId, body.supplierId),
       ),
     );
@@ -91,7 +94,7 @@ router.post("/", zValidator("json", createSchema), async (c) => {
   const [questionnaire] = await db
     .insert(questionnaires)
     .values({
-      enterpriseId: user.enterpriseId,
+      enterpriseId,
       supplierId: body.supplierId,
       title: body.title,
       questions: body.questions,
@@ -104,7 +107,8 @@ router.post("/", zValidator("json", createSchema), async (c) => {
 
 router.get("/:id", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const [questionnaire] = await db
@@ -113,7 +117,7 @@ router.get("/:id", async (c) => {
     .where(
       and(
         eq(questionnaires.id, c.req.param("id")),
-        eq(questionnaires.enterpriseId, user.enterpriseId),
+        eq(questionnaires.enterpriseId, enterpriseId),
       ),
     );
 
@@ -129,7 +133,8 @@ router.get("/:id", async (c) => {
 
 router.post("/:id/send", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const [questionnaire] = await db
@@ -138,7 +143,7 @@ router.post("/:id/send", async (c) => {
     .where(
       and(
         eq(questionnaires.id, c.req.param("id")),
-        eq(questionnaires.enterpriseId, user.enterpriseId),
+        eq(questionnaires.enterpriseId, enterpriseId),
       ),
     );
 
@@ -152,14 +157,14 @@ router.post("/:id/send", async (c) => {
     .where(eq(questionnaires.id, questionnaire.id))
     .returning();
 
-  runPlan({
+  const { jobId } = await dispatchPlan({
     type: "questionnaire_dispatched",
     questionnaireId: questionnaire.id,
     enterpriseId: questionnaire.enterpriseId,
     supplierId: questionnaire.supplierId,
-  }).catch(console.error);
+  });
 
-  return c.json(updated);
+  return c.json({ ...updated, jobId });
 });
 
 export default router;

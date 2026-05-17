@@ -1,5 +1,8 @@
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { agentJobs } from "../db/schema";
 import { writeAudit } from "../lib/audit";
+import { db } from "../lib/db";
 import { extractJson, generate } from "../lib/llm";
 
 // ── Task types ────────────────────────────────────────────────────────────────
@@ -86,6 +89,27 @@ Respond with ONLY valid JSON matching this schema:
 
 Keep steps minimal — only what is necessary for the task. Order matters: steps execute sequentially.`;
 
+// ── Retry utility ─────────────────────────────────────────────────────────────
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts: number,
+  baseDelayMs: number,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        await Bun.sleep(baseDelayMs * 2 ** (attempt - 1));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 // ── LLM planning ──────────────────────────────────────────────────────────────
 
 function taskPrompt(task: PlannerTask): string {
@@ -93,21 +117,30 @@ function taskPrompt(task: PlannerTask): string {
 }
 
 async function planWithLLM(task: PlannerTask): Promise<Plan> {
-  const raw = await generate([{ role: "user", content: taskPrompt(task) }], {
-    model: "pro",
-    system: SYSTEM_PROMPT,
-    temperature: 0.2,
-  });
+  return withRetry(
+    async () => {
+      const raw = await generate(
+        [{ role: "user", content: taskPrompt(task) }],
+        {
+          model: "pro",
+          system: SYSTEM_PROMPT,
+          temperature: 0.2,
+        },
+      );
 
-  const parsed = PlanSchema.safeParse(JSON.parse(extractJson(raw)));
+      const parsed = PlanSchema.safeParse(JSON.parse(extractJson(raw)));
 
-  if (!parsed.success) {
-    throw new Error(
-      `Planner LLM returned invalid plan: ${parsed.error.message}`,
-    );
-  }
+      if (!parsed.success) {
+        throw new Error(
+          `Planner LLM returned invalid plan: ${parsed.error.message}`,
+        );
+      }
 
-  return parsed.data;
+      return parsed.data;
+    },
+    3,
+    800,
+  );
 }
 
 // ── Agent dispatch ────────────────────────────────────────────────────────────
@@ -125,42 +158,40 @@ async function executeStep(
   };
 
   try {
-    let output: unknown;
-
-    switch (step.agent) {
-      case "intake": {
-        const { runIntake } = await import("./intake");
-        output = await runIntake(step.params, context);
-        break;
-      }
-      case "ai-act": {
-        const { runAiAct } = await import("./ai-act");
-        output = await runAiAct(step.params, context);
-        break;
-      }
-      case "carbon": {
-        const { runCarbon } = await import("./carbon");
-        output = await runCarbon(step.params, context);
-        break;
-      }
-      case "supply-chain": {
-        const { runSupplyChain } = await import("./supply-chain");
-        output = await runSupplyChain(step.params, context);
-        break;
-      }
-      case "risk-deadline": {
-        const { runRiskDeadline } = await import("./risk-deadline");
-        output = await runRiskDeadline(step.params, context);
-        break;
-      }
-      case "esrs-report": {
-        const { runEsrsReport } = await import("./esrs-report");
-        output = await runEsrsReport(step.params, context);
-        break;
-      }
-      default:
-        output = { skipped: true };
-    }
+    const output = await withRetry(
+      async () => {
+        switch (step.agent) {
+          case "intake": {
+            const { runIntake } = await import("./intake");
+            return runIntake(step.params, context);
+          }
+          case "ai-act": {
+            const { runAiAct } = await import("./ai-act");
+            return runAiAct(step.params, context);
+          }
+          case "carbon": {
+            const { runCarbon } = await import("./carbon");
+            return runCarbon(step.params, context);
+          }
+          case "supply-chain": {
+            const { runSupplyChain } = await import("./supply-chain");
+            return runSupplyChain(step.params, context);
+          }
+          case "risk-deadline": {
+            const { runRiskDeadline } = await import("./risk-deadline");
+            return runRiskDeadline(step.params, context);
+          }
+          case "esrs-report": {
+            const { runEsrsReport } = await import("./esrs-report");
+            return runEsrsReport(step.params, context);
+          }
+          default:
+            return { skipped: true };
+        }
+      },
+      2,
+      800,
+    );
 
     return { agent: step.agent, action: step.action, success: true, output };
   } catch (err) {
@@ -229,14 +260,69 @@ export async function runPlan(task: PlannerTask): Promise<PlannerResult> {
   }
 
   const success = results.every((r) => r.success);
+  const failedSteps = results
+    .filter((r) => !r.success)
+    .map((r) => ({ agent: r.agent, action: r.action, error: r.output }));
 
   await writeAudit({
     agentName: "planner",
     action: "plan_completed",
     enterpriseId,
     supplierId,
-    payload: { taskType: task.type, success, stepCount: results.length },
+    payload: {
+      taskType: task.type,
+      success,
+      stepCount: results.length,
+      failedSteps,
+    },
   });
 
   return { success, taskType: task.type, steps: results };
+}
+
+// ── Background dispatch with job tracking ─────────────────────────────────────
+
+export async function dispatchPlan(
+  task: PlannerTask,
+): Promise<{ jobId: string }> {
+  const enterpriseId = "enterpriseId" in task ? task.enterpriseId : undefined;
+  const supplierId = "supplierId" in task ? task.supplierId : undefined;
+
+  const rows = await db
+    .insert(agentJobs)
+    .values({
+      taskType: task.type,
+      payload: task as Record<string, unknown>,
+      status: "running",
+      enterpriseId: enterpriseId ?? null,
+      supplierId: supplierId ?? null,
+    })
+    .returning();
+
+  const jobId = rows[0]!.id;
+
+  runPlan(task)
+    .then(() =>
+      db
+        .update(agentJobs)
+        .set({
+          status: "completed",
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(agentJobs.id, jobId)),
+    )
+    .catch((err) =>
+      db
+        .update(agentJobs)
+        .set({
+          status: "failed",
+          lastError: err instanceof Error ? err.message : String(err),
+          attempts: sql`${agentJobs.attempts} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(agentJobs.id, jobId)),
+    );
+
+  return { jobId };
 }

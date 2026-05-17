@@ -2,8 +2,9 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { runPlan } from "../../agents/planner";
+import { dispatchPlan } from "../../agents/planner";
 import { questionnaireResponses, questionnaires } from "../../db/schema";
+import { authIdToUuid } from "../../lib/auth-helpers";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 
@@ -11,15 +12,15 @@ const router = new Hono<{ Variables: AuthVariables }>();
 
 router.get("/", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const rows = await db
     .select()
     .from(questionnaires)
     .where(
       and(
-        eq(questionnaires.supplierId, user.supplierId),
+        eq(questionnaires.supplierId, supplierId),
         inArray(questionnaires.status, [
           "sent",
           "in_progress",
@@ -34,8 +35,8 @@ router.get("/", async (c) => {
 
 router.get("/:id", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const [questionnaire] = await db
     .select()
@@ -43,7 +44,7 @@ router.get("/:id", async (c) => {
     .where(
       and(
         eq(questionnaires.id, c.req.param("id")),
-        eq(questionnaires.supplierId, user.supplierId),
+        eq(questionnaires.supplierId, supplierId),
       ),
     );
 
@@ -55,7 +56,7 @@ router.get("/:id", async (c) => {
     .where(
       and(
         eq(questionnaireResponses.questionnaireId, questionnaire.id),
-        eq(questionnaireResponses.supplierId, user.supplierId),
+        eq(questionnaireResponses.supplierId, supplierId),
       ),
     );
 
@@ -69,8 +70,8 @@ const respondSchema = z.object({
 
 router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const body = c.req.valid("json");
 
@@ -80,7 +81,7 @@ router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
     .where(
       and(
         eq(questionnaires.id, c.req.param("id")),
-        eq(questionnaires.supplierId, user.supplierId),
+        eq(questionnaires.supplierId, supplierId),
       ),
     );
 
@@ -96,7 +97,7 @@ router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
     .where(
       and(
         eq(questionnaireResponses.questionnaireId, questionnaire.id),
-        eq(questionnaireResponses.supplierId, user.supplierId),
+        eq(questionnaireResponses.supplierId, supplierId),
       ),
     );
 
@@ -114,7 +115,7 @@ router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
         .insert(questionnaireResponses)
         .values({
           questionnaireId: questionnaire.id,
-          supplierId: user.supplierId,
+          supplierId,
           answers: body.answers,
           submittedAt: body.submit ? now : null,
         })
@@ -134,14 +135,15 @@ router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
       .where(eq(questionnaires.id, questionnaire.id));
   }
 
+  let jobId: string | undefined;
   if (body.submit && response) {
-    runPlan({
+    ({ jobId } = await dispatchPlan({
       type: "questionnaire_responded",
       questionnaireId: questionnaire.id,
       responseId: response.id,
       enterpriseId: questionnaire.enterpriseId,
       supplierId: questionnaire.supplierId,
-    }).catch(console.error);
+    }));
 
     // Always recalculate Scope 3 deterministically — don't rely solely on LLM planning.
     const { runSupplyChain } = await import("../../agents/supply-chain");
@@ -154,7 +156,7 @@ router.post("/:id/respond", zValidator("json", respondSchema), async (c) => {
     ).catch(console.error);
   }
 
-  return c.json(response);
+  return c.json(jobId ? { ...response, jobId } : response);
 });
 
 export default router;

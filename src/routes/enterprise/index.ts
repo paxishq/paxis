@@ -1,7 +1,13 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { runPlan } from "../../agents/planner";
-import { auditLog, enterprises, scope3Aggregates } from "../../db/schema";
+import { dispatchPlan } from "../../agents/planner";
+import {
+  agentJobs,
+  auditLog,
+  enterprises,
+  scope3Aggregates,
+} from "../../db/schema";
+import { authIdToUuid } from "../../lib/auth-helpers";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 import { requireAuth, requireEnterprise } from "../../middleware/session";
@@ -15,13 +21,14 @@ enterprise.use("*", requireAuth, requireEnterprise);
 
 enterprise.get("/me", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const [ent] = await db
     .select()
     .from(enterprises)
-    .where(eq(enterprises.id, user.enterpriseId));
+    .where(eq(enterprises.id, enterpriseId));
 
   if (!ent) return c.json({ error: "Enterprise not found" }, 404);
 
@@ -34,13 +41,14 @@ enterprise.route("/carbon", carbonRoutes);
 
 enterprise.get("/scope3", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const rows = await db
     .select()
     .from(scope3Aggregates)
-    .where(eq(scope3Aggregates.enterpriseId, user.enterpriseId))
+    .where(eq(scope3Aggregates.enterpriseId, enterpriseId))
     .orderBy(desc(scope3Aggregates.calculatedAt));
 
   return c.json(rows);
@@ -50,18 +58,20 @@ enterprise.get("/scope3", async (c) => {
 
 enterprise.post("/risk/assess", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const { runRiskDeadline } = await import("../../agents/risk-deadline");
-  runRiskDeadline({}, { enterpriseId: user.enterpriseId }).catch(console.error);
+  runRiskDeadline({}, { enterpriseId }).catch(console.error);
 
   return c.json({ status: "assessing" }, 202);
 });
 
 enterprise.get("/risk/latest", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const [entry] = await db
@@ -69,7 +79,7 @@ enterprise.get("/risk/latest", async (c) => {
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.enterpriseId, user.enterpriseId),
+        eq(auditLog.enterpriseId, enterpriseId),
         eq(auditLog.agentName, "risk-deadline"),
         eq(auditLog.action, "risk_deadline_assessed"),
       ),
@@ -87,25 +97,27 @@ enterprise.get("/risk/latest", async (c) => {
 
 enterprise.post("/reports/esrs", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const [ent] = await db
     .select()
     .from(enterprises)
-    .where(eq(enterprises.id, user.enterpriseId));
+    .where(eq(enterprises.id, enterpriseId));
 
   if (!ent) return c.json({ error: "Enterprise not found" }, 404);
 
-  runPlan({
+  const { jobId } = await dispatchPlan({
     type: "esrs_report_requested",
-    enterpriseId: user.enterpriseId,
+    enterpriseId,
     reportingYear: ent.reportingYear,
-  }).catch(console.error);
+  });
 
   return c.json(
     {
       status: "generating",
+      jobId,
       message:
         "Report generation started. Poll GET /reports/esrs/latest for the result.",
     },
@@ -115,7 +127,8 @@ enterprise.post("/reports/esrs", async (c) => {
 
 enterprise.get("/reports/esrs/latest", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const [entry] = await db
@@ -123,7 +136,7 @@ enterprise.get("/reports/esrs/latest", async (c) => {
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.enterpriseId, user.enterpriseId),
+        eq(auditLog.enterpriseId, enterpriseId),
         eq(auditLog.agentName, "esrs-report"),
         eq(auditLog.action, "esrs_report_generated"),
       ),
@@ -135,6 +148,36 @@ enterprise.get("/reports/esrs/latest", async (c) => {
 
   const payload = entry.payload as { report: unknown; [k: string]: unknown };
   return c.json({ generatedAt: entry.createdAt, ...payload });
+});
+
+// ── Job status ────────────────────────────────────────────────────────────────
+
+enterprise.get("/jobs/:id", async (c) => {
+  const user = c.get("user")!;
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
+    return c.json({ error: "Not linked to an enterprise" }, 403);
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(
+      and(
+        eq(agentJobs.id, c.req.param("id")),
+        eq(agentJobs.enterpriseId, enterpriseId),
+      ),
+    );
+
+  if (!job) return c.json({ error: "Not found" }, 404);
+
+  return c.json({
+    id: job.id,
+    status: job.status,
+    taskType: job.taskType,
+    lastError: job.lastError,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt,
+  });
 });
 
 export default enterprise;

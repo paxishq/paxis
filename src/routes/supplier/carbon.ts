@@ -2,8 +2,9 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { runPlan } from "../../agents/planner";
+import { dispatchPlan } from "../../agents/planner";
 import { carbonEntries } from "../../db/schema";
+import { authIdToUuid } from "../../lib/auth-helpers";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 
@@ -13,17 +14,17 @@ const scopeEnum = z.enum(["scope1", "scope2"]);
 
 router.get("/", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const scope = c.req.query("scope");
   const where =
     scope === "scope1" || scope === "scope2"
       ? and(
-          eq(carbonEntries.supplierId, user.supplierId),
+          eq(carbonEntries.supplierId, supplierId),
           eq(carbonEntries.scope, scope),
         )
-      : eq(carbonEntries.supplierId, user.supplierId);
+      : eq(carbonEntries.supplierId, supplierId);
 
   const rows = await db.select().from(carbonEntries).where(where);
 
@@ -41,15 +42,15 @@ const createSchema = z.object({
 
 router.post("/", zValidator("json", createSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const body = c.req.valid("json");
 
   const [entry] = await db
     .insert(carbonEntries)
     .values({
-      supplierId: user.supplierId,
+      supplierId,
       scope: body.scope,
       periodStart: new Date(body.periodStart),
       periodEnd: new Date(body.periodEnd),
@@ -62,19 +63,19 @@ router.post("/", zValidator("json", createSchema), async (c) => {
 
   if (!entry) return c.json({ error: "Failed to create entry" }, 500);
 
-  runPlan({
+  const { jobId } = await dispatchPlan({
     type: "carbon_entry_added",
     entryId: entry.id,
-    supplierId: user.supplierId,
-  }).catch(console.error);
+    supplierId,
+  });
 
-  return c.json(entry, 201);
+  return c.json({ ...entry, jobId }, 201);
 });
 
 router.post("/parse", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const body = await c.req.parseBody();
   const file = body["file"];
@@ -94,7 +95,7 @@ router.post("/parse", async (c) => {
   const { runCarbon } = await import("../../agents/carbon");
   const result = await runCarbon(
     { documentData, mimeType: file.type },
-    { supplierId: user.supplierId },
+    { supplierId },
   );
 
   return c.json(result);

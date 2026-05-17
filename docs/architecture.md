@@ -34,6 +34,7 @@ Browser
         │                                             ├── ai_inventories
         │                                             ├── carbon_entries
         │                                             ├── scope3_aggregates
+        │                                             ├── agent_jobs (job tracking)
         │                                             └── audit_log (append-only)
         └── HTML routes ──────── React frontend (enterprise + supplier portals)
 ```
@@ -43,11 +44,12 @@ Browser
 A typical enterprise Scope 3 questionnaire dispatch:
 
 1. Enterprise admin POSTs to `/api/enterprise/questionnaires/:id/send` — Hono session middleware validates Better Auth session; route updates DB status to `sent`
-2. Route fires `runPlan({ type: "questionnaire_dispatched", ... }).catch(console.error)` and **returns HTTP response immediately** — agent runs in the background
-3. Planner Agent calls Gemini 3.1 Pro to produce a JSON execution plan; dispatches to Intake and other sub-agents in sequence
+2. Route calls `dispatchPlan({ type: "questionnaire_dispatched", ... })` which creates an `agent_jobs` row (status=`running`) and fires `runPlan` in the background; **returns HTTP response with `jobId` immediately**
+3. Planner Agent calls Gemini 3.1 Pro to produce a JSON execution plan (with up to 3 retries + exponential backoff); dispatches to Intake and other sub-agents in sequence (each step retried up to 2×)
 4. Supplier receives questionnaire via `/api/supplier/questionnaires`; submits via POST `/:id/respond` with `{ submit: true }`
-5. Supplier route fires `runPlan({ type: "questionnaire_responded", ... })` fire-and-forget; status updated to `completed`
+5. Supplier route calls `dispatchPlan({ type: "questionnaire_responded", ... })`; `agent_jobs` row updates to `completed` or `failed` when `runPlan` resolves
 6. Planner dispatches Supply Chain Agent to aggregate responses and write to `scope3_aggregates`
+        │                                             ├── agent_jobs (job tracking)
 7. ESRS Report Agent assembles audit-ready output on demand
 8. **Every agent step** calls `writeAudit()` via `src/lib/audit.ts` before returning — append-only record in `audit_log`
 
@@ -59,23 +61,25 @@ A typical enterprise Scope 3 questionnaire dispatch:
 | `src/app.ts` | Hono application — all API routes, auth handler, session middleware |
 | `src/routes/enterprise/` | Enterprise dashboard API handlers (Hono) |
 | `src/routes/supplier/` | Supplier portal API handlers (Hono) |
-| `src/agents/planner.ts` | Coordinates all agents; maintains shared compliance state; Gemini 3.1 Pro Preview |
+| `src/agents/planner.ts` | Coordinates all agents; Gemini 3.1 Pro Preview; `dispatchPlan()` creates `agent_jobs` rows; `withRetry()` for resilience |
 | `src/agents/intake.ts` | **Implemented** — fetches questionnaire + supplier carbon/AI data; Gemini Flash maps existing data to questions; upserts draft response |
 | `src/agents/ai-act.ts` | Discovers AI tools; classifies by EU AI Act risk tier; generates documentation |
 | `src/agents/carbon.ts` | Ingests energy bills via Gemini multimodal; calculates Scope 1 & 2 |
 | `src/agents/supply-chain.ts` | **Implemented** — aggregates completed questionnaire responses; Gemini Flash extracts emission figures; writes to `scope3_aggregates` |
+        │                                             ├── agent_jobs (job tracking)
 | `src/agents/risk-deadline.ts` | Monitors filing deadlines; flags threshold breaches; surfaces regulatory changes |
 | `src/agents/esrs-report.ts` | Assembles CSRD-standard ESRS output; generates audit-ready PDFs |
 | `src/lib/llm.ts` | LLM provider abstraction — Gemini (AI Studio dev / Vertex AI ADC prod) or Featherless via `LLM_PROVIDER` |
 | `src/lib/auth-client.ts` | Better Auth React client — used by frontend portals for `signIn.social` and `signOut` |
 | `src/lib/audit.ts` | `writeAudit()` — sole write path to `audit_log`; used by all agents; never called from routes |
 | `src/lib/auth.ts` | Better Auth instance — Drizzle adapter, social providers, custom user fields |
+| `src/lib/auth-helpers.ts` | `authIdToUuid()` — validates Better Auth text IDs against UUID regex before use in domain joins |
 | `src/lib/db.ts` | Drizzle + Bun native SQL connection; reads `DATABASE_URL`; exports `db` |
-| `src/db/schema.ts` | Drizzle schema — domain tables, enums, cross-schema relations to `user` |
+| `src/db/schema.ts` | Drizzle schema — domain tables (incl. `agent_jobs`), enums, cross-schema relations to `user` |
 | `src/db/auth-schema.ts` | **Generated — do not edit.** Better Auth tables (`user`, `session`, `account`, `verification`) + custom fields (`role`, `enterpriseId`, `supplierId`). Regenerate with `bun run auth:generate`. |
 | `src/frontend/` | React + shadcn/ui apps for enterprise and supplier portals |
 | `infra/main.tf` | OpenTofu: Vultr VM + networking + floating IP |
-| `scripts/` | Cloud-init, idempotent server setup, deploy-key bootstrap |
+| `scripts/` | Cloud-init, idempotent server setup (`setup.sh`), deploy script (`deploy.sh`), deploy-key bootstrap, account-linking CLI (`link-account.ts`) |
 
 ## Key Design Decisions
 
@@ -121,4 +125,4 @@ Full decision records: `docs/decisions.md`
 
 ---
 
-*Last updated: 2026-05-14 (post-frontend-auth-agents)*
+*Last updated: 2026-05-16 (job tracking, retry, UUID validation, prod deploy scripts)*

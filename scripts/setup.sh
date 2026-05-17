@@ -11,10 +11,12 @@ set -euo pipefail
 # ── REQUIRED ENV VARS ─────────────────────────────────────────────────────────
 : "${CF_API_TOKEN:?CF_API_TOKEN is required}"
 : "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}"
-: "${GOOGLE_CLOUD_PROJECT:?GOOGLE_CLOUD_PROJECT is required}"
 # ── OPTIONAL ENV VARS ─────────────────────────────────────────────────────────
-# Path to GCP service account key JSON — required on non-GCP hosts (e.g. Vultr)
-# On GCP Compute/Cloud Run this can be left blank; ADC uses the metadata server.
+# LLM: set GEMINI_API_KEY for AI Studio (dev/hackathon) OR leave blank and set
+# GOOGLE_CLOUD_PROJECT to use Vertex AI ADC (production GCP).
+GEMINI_API_KEY="${GEMINI_API_KEY:-}"
+GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-}"
+# Path to GCP service account key JSON — required on non-GCP hosts using Vertex AI.
 GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-}"
 GOOGLE_CLOUD_LOCATION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
@@ -97,11 +99,13 @@ NODE_ENV=production
 
 # Auth
 BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+BETTER_AUTH_URL=https://getpaxis.com
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 
-# LLM — Vertex AI via ADC (no API key; GEMINI_API_KEY left blank triggers Vertex AI mode)
+# LLM — set GEMINI_API_KEY for AI Studio, or leave blank for Vertex AI ADC
 LLM_PROVIDER=${LLM_PROVIDER}
+GEMINI_API_KEY=${GEMINI_API_KEY}
 GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
 GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION}
 GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}

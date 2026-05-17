@@ -2,8 +2,9 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { runPlan } from "../../agents/planner";
+import { dispatchPlan } from "../../agents/planner";
 import { aiInventories } from "../../db/schema";
+import { authIdToUuid } from "../../lib/auth-helpers";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 
@@ -11,13 +12,13 @@ const router = new Hono<{ Variables: AuthVariables }>();
 
 router.get("/", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const rows = await db
     .select()
     .from(aiInventories)
-    .where(eq(aiInventories.supplierId, user.supplierId));
+    .where(eq(aiInventories.supplierId, supplierId));
 
   return c.json(rows);
 });
@@ -34,33 +35,33 @@ const createSchema = z.object({
 
 router.post("/", zValidator("json", createSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const body = c.req.valid("json");
 
   const [entry] = await db
     .insert(aiInventories)
-    .values({ supplierId: user.supplierId, ...body })
+    .values({ supplierId, ...body })
     .returning();
 
   if (!entry) return c.json({ error: "Failed to create entry" }, 500);
 
-  runPlan({
+  const { jobId } = await dispatchPlan({
     type: "ai_inventory_updated",
     inventoryId: entry.id,
-    supplierId: user.supplierId,
-  }).catch(console.error);
+    supplierId,
+  });
 
-  return c.json(entry, 201);
+  return c.json({ ...entry, jobId }, 201);
 });
 
 const updateSchema = createSchema.partial();
 
 router.patch("/:id", zValidator("json", updateSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const body = c.req.valid("json");
   const now = new Date();
@@ -71,33 +72,33 @@ router.patch("/:id", zValidator("json", updateSchema), async (c) => {
     .where(
       and(
         eq(aiInventories.id, c.req.param("id")),
-        eq(aiInventories.supplierId, user.supplierId),
+        eq(aiInventories.supplierId, supplierId),
       ),
     )
     .returning();
 
   if (!updated) return c.json({ error: "Not found" }, 404);
 
-  runPlan({
+  const { jobId } = await dispatchPlan({
     type: "ai_inventory_updated",
     inventoryId: updated.id,
-    supplierId: user.supplierId,
-  }).catch(console.error);
+    supplierId,
+  });
 
-  return c.json(updated);
+  return c.json({ ...updated, jobId });
 });
 
 router.delete("/:id", async (c) => {
   const user = c.get("user")!;
-  if (!user.supplierId)
-    return c.json({ error: "Not linked to a supplier" }, 403);
+  const supplierId = authIdToUuid(user.supplierId);
+  if (!supplierId) return c.json({ error: "Not linked to a supplier" }, 403);
 
   const deleted = await db
     .delete(aiInventories)
     .where(
       and(
         eq(aiInventories.id, c.req.param("id")),
-        eq(aiInventories.supplierId, user.supplierId),
+        eq(aiInventories.supplierId, supplierId),
       ),
     )
     .returning();

@@ -291,6 +291,41 @@ export const scope3Aggregates = pgTable(
   (t) => [index("scope3_aggregates_enterprise_idx").on(t.enterpriseId)],
 );
 
+// ── Agent Jobs ───────────────────────────────────────────────────────────────
+
+export const agentJobStatusEnum = pgEnum("agent_job_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+
+export const agentJobs = pgTable(
+  "agent_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskType: text("task_type").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: agentJobStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    enterpriseId: uuid("enterprise_id").references(() => enterprises.id),
+    supplierId: uuid("supplier_id").references(() => suppliers.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("agent_jobs_status_idx").on(t.status),
+    index("agent_jobs_enterprise_idx").on(t.enterpriseId),
+    index("agent_jobs_supplier_idx").on(t.supplierId),
+  ],
+);
+
 // ── Audit Log (append-only — written exclusively by agent functions) ─────────
 
 export const auditLog = pgTable(

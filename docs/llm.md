@@ -51,7 +51,7 @@
 │   ├── app.ts                     # Hono application — all API routes registered here
 │   ├── routes/
 │   │   ├── enterprise/
-│   │   │   ├── index.ts           # GET /me, GET /scope3; mounts suppliers + questionnaires
+│   │   │   ├── index.ts           # GET /me, GET /scope3, GET /jobs/:id; mounts suppliers + questionnaires
 │   │   │   ├── suppliers.ts       # GET /, POST /, DELETE /:supplierId
 │   │   │   └── questionnaires.ts  # GET / (?status=), POST /, GET /:id, POST /:id/send
 │   │   └── supplier/
@@ -60,7 +60,7 @@
 │   │       ├── ai-inventory.ts    # GET /, POST /, PATCH /:id, DELETE /:id
 │   │       └── carbon.ts          # GET / (?scope=), POST / (manual + audit), POST /parse (Gemini multimodal)
 │   ├── agents/                    # Six specialized agents — all fully implemented
-│   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro Preview
+│   │   ├── planner.ts             # Coordinates all agents; Gemini 3.1 Pro Preview; dispatchPlan() for job tracking; withRetry()
 │   │   ├── intake.ts              # Maps questionnaire questions to existing supplier data
 │   │   ├── ai-act.ts              # EU AI Act risk tier classification (Gemini Flash)
 │   │   ├── carbon.ts              # Scope 1 & 2 from documents (multimodal) or summary mode
@@ -69,6 +69,7 @@
 │   │   └── esrs-report.ts         # ESRS 2 + ESRS E1 report generation (Gemini Pro)
 │   ├── lib/
 │   │   ├── llm.ts                 # LLM provider abstraction (Gemini AI Studio / Vertex AI ADC | Featherless)
+│   │   ├── auth-helpers.ts        # authIdToUuid() — validates Better Auth text IDs before domain table joins
 │   │   ├── auth-client.ts         # Better Auth React client (frontend signIn/signOut)
 │   │   ├── audit.ts               # writeAudit() — sole write path to audit_log
 │   │   ├── auth.ts                # Better Auth instance + Drizzle adapter + Google OAuth only
@@ -77,16 +78,19 @@
 │   │   ├── schema.ts              # Drizzle schema — domain tables, enums, cross-schema relations
 │   │   ├── auth-schema.ts         # GENERATED — Better Auth tables; never hand-edit
 │   │   └── migrations/            # Drizzle-generated SQL (never hand-edit)
-│   ├── test-setup.ts              # Bun test preload — creates paxis_test DB, runs migrations
+│   ├── test-setup.ts              # Bun test preload — sets env vars for test run
 │   └── frontend/
 │       ├── enterprise/            # Enterprise dashboard React app
 │       └── supplier/              # Supplier portal React app
 ├── infra/
 │   └── main.tf                    # OpenTofu — Vultr VM + networking
+├── DEPLOY.md                      # Manual production deploy checklist (Vultr + Cloudflare + OAuth)
 └── scripts/
     ├── cloud-init.yaml            # Vultr instance provisioning (cloud-init)
-    ├── setup.sh                   # Post-boot setup (idempotent, 9 steps)
+    ├── setup.sh                   # Post-boot setup (idempotent, 9 steps); writes /etc/paxis.env
+    ├── deploy.sh                  # Repeatable deploy script (git pull → build → restart)
     ├── deploy-key.sh              # One-time GitHub deploy key setup
+    ├── link-account.ts            # Assigns role + enterpriseId/supplierId to OAuth user after first sign-in
     └── paxis.service              # systemd unit for the Bun app
 ```
 
@@ -179,7 +183,7 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 - All API routes are Hono handlers registered in `src/app.ts` or imported route files
 - kebab-case filenames; PascalCase types and React components
 - All agent functions must write to the audit log before returning — no silent failures; stubs must also call `writeAudit()`
-- Routes dispatch agents fire-and-forget: `runPlan(...).catch(console.error)` — return HTTP response immediately; never await agent calls in route handlers
+- Routes dispatch agents via `dispatchPlan(task)` — creates a tracked `agent_jobs` row, fires `runPlan` in the background, returns `{ jobId }` immediately; never await agent calls in route handlers
 - Document parsing always via Gemini Flash — never attempt to parse PDF/image with text-only models
 - Zod validation on all LLM responses — never trust raw model output
 - Zod 4 API: use `z.uuid()` not deprecated `z.string().uuid()`; use `z.iso.datetime()` for datetime strings
@@ -238,4 +242,4 @@ All LLM calls go through `src/lib/llm.ts`. Switch providers with a single env va
 
 ---
 
-*Last updated: 2026-05-15 (all agents implemented; carbon audit fixed)*
+*Last updated: 2026-05-16 (job tracking, retry, UUID validation, agent tests, prod deploy scripts)*

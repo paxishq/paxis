@@ -2,8 +2,9 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { runPlan } from "../../agents/planner";
+import { dispatchPlan } from "../../agents/planner";
 import { enterpriseCarbonEntries } from "../../db/schema";
+import { authIdToUuid } from "../../lib/auth-helpers";
 import { db } from "../../lib/db";
 import type { AuthVariables } from "../../middleware/session";
 
@@ -13,17 +14,18 @@ const scopeEnum = z.enum(["scope1", "scope2"]);
 
 router.get("/", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const scope = c.req.query("scope");
   const where =
     scope === "scope1" || scope === "scope2"
       ? and(
-          eq(enterpriseCarbonEntries.enterpriseId, user.enterpriseId),
+          eq(enterpriseCarbonEntries.enterpriseId, enterpriseId),
           eq(enterpriseCarbonEntries.scope, scope),
         )
-      : eq(enterpriseCarbonEntries.enterpriseId, user.enterpriseId);
+      : eq(enterpriseCarbonEntries.enterpriseId, enterpriseId);
 
   const rows = await db.select().from(enterpriseCarbonEntries).where(where);
   return c.json(rows);
@@ -40,7 +42,8 @@ const createSchema = z.object({
 
 router.post("/", zValidator("json", createSchema), async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const body = c.req.valid("json");
@@ -48,7 +51,7 @@ router.post("/", zValidator("json", createSchema), async (c) => {
   const [entry] = await db
     .insert(enterpriseCarbonEntries)
     .values({
-      enterpriseId: user.enterpriseId,
+      enterpriseId,
       scope: body.scope,
       periodStart: new Date(body.periodStart),
       periodEnd: new Date(body.periodEnd),
@@ -60,17 +63,18 @@ router.post("/", zValidator("json", createSchema), async (c) => {
 
   if (!entry) return c.json({ error: "Failed to create entry" }, 500);
 
-  runPlan({
+  const { jobId } = await dispatchPlan({
     type: "scope3_recalculate",
-    enterpriseId: user.enterpriseId,
-  }).catch(console.error);
+    enterpriseId,
+  });
 
-  return c.json(entry, 201);
+  return c.json({ ...entry, jobId }, 201);
 });
 
 router.delete("/:id", async (c) => {
   const user = c.get("user")!;
-  if (!user.enterpriseId)
+  const enterpriseId = authIdToUuid(user.enterpriseId);
+  if (!enterpriseId)
     return c.json({ error: "Not linked to an enterprise" }, 403);
 
   const deleted = await db
@@ -78,7 +82,7 @@ router.delete("/:id", async (c) => {
     .where(
       and(
         eq(enterpriseCarbonEntries.id, c.req.param("id")),
-        eq(enterpriseCarbonEntries.enterpriseId, user.enterpriseId),
+        eq(enterpriseCarbonEntries.enterpriseId, enterpriseId),
       ),
     )
     .returning();
