@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, Building2, CheckCircle2, FileText, LayoutGrid, Loader2, LogOut, Plus, RefreshCw, Send, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, Building2, CheckCircle2, FileText, LayoutGrid, Loader2, LogOut, Plus, RefreshCw, Send, XCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +56,17 @@ type Questionnaire = {
 };
 
 type EnterprisePage = "overview" | "suppliers" | "questionnaires" | "esrs";
+
+type QuestionnaireResponse = {
+	id: string;
+	questionnaireId: string;
+	supplierId: string;
+	answers: Record<string, unknown>;
+	submittedAt: string | null;
+	createdAt: string;
+};
+
+type QuestionnaireDetail = Questionnaire & { responses: QuestionnaireResponse[] };
 
 type EsrsReport = {
 	generatedAt: string;
@@ -587,9 +598,11 @@ function OverviewPage({
 function SuppliersPage({
 	suppliers,
 	onAdded,
+	onSelect,
 }: {
 	suppliers: Supplier[];
 	onAdded: (s: Supplier) => void;
+	onSelect: (id: string) => void;
 }) {
 	return (
 		<div>
@@ -618,7 +631,11 @@ function SuppliersPage({
 					</thead>
 					<tbody>
 						{suppliers.map((s) => (
-							<tr key={s.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+							<tr
+								key={s.id}
+								onClick={() => onSelect(s.id)}
+								className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors cursor-pointer"
+							>
 								<td className="py-3 text-[13px] font-medium text-zinc-200">{s.name}</td>
 								<td className="py-3 text-[13px] text-zinc-500">{s.country}</td>
 								<td className="py-3 font-mono text-[12px] text-zinc-600">{s.vatNumber ?? "—"}</td>
@@ -636,12 +653,14 @@ function QuestionnairesPage({
 	suppliers,
 	onCreated,
 	onSend,
+	onSelect,
 	sending,
 }: {
 	questionnaires: Questionnaire[];
 	suppliers: Supplier[];
 	onCreated: (q: Questionnaire) => void;
 	onSend: (id: string) => void;
+	onSelect: (id: string) => void;
 	sending: string | null;
 }) {
 	function supplierName(id: string) {
@@ -680,13 +699,17 @@ function QuestionnairesPage({
 					</thead>
 					<tbody>
 						{questionnaires.map((q) => (
-							<tr key={q.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+							<tr
+								key={q.id}
+								onClick={() => onSelect(q.id)}
+								className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors cursor-pointer"
+							>
 								<td className="py-3 text-[13px] font-medium text-zinc-200">{q.title}</td>
 								<td className="py-3 text-[13px] text-zinc-500">{supplierName(q.supplierId)}</td>
 								<td className="py-3"><StatusChip status={q.status} /></td>
 								<td className="py-3 font-mono text-[12px] text-zinc-600">{formatDate(q.dueAt)}</td>
 								<td className="py-3 font-mono text-[12px] text-zinc-600">{formatDate(q.sentAt)}</td>
-								<td className="py-3 text-right">
+								<td className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
 									{q.status === "draft" && (
 										<button
 											type="button"
@@ -919,6 +942,290 @@ function EsrsReportPage({
 	);
 }
 
+// ── Questionnaire detail page ─────────────────────────────────────────────────
+
+function formatAnswer(value: unknown): string {
+	if (value === null || value === undefined) return "—";
+	if (typeof value === "boolean") return value ? "Yes" : "No";
+	return String(value);
+}
+
+function QuestionnaireDetailPage({
+	questionnaireId,
+	suppliers,
+	onBack,
+	onSend,
+	sending,
+	refreshKey,
+}: {
+	questionnaireId: string;
+	suppliers: Supplier[];
+	onBack: () => void;
+	onSend: (id: string) => void;
+	sending: string | null;
+	refreshKey: number;
+}) {
+	const [detail, setDetail] = useState<QuestionnaireDetail | null>(null);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		setLoading(true);
+		fetch(`/api/enterprise/questionnaires/${questionnaireId}`)
+			.then((r) => r.json())
+			.then((data) => { setDetail(data as QuestionnaireDetail); setLoading(false); });
+	}, [questionnaireId, refreshKey]);
+
+	const supplierName = (id: string) =>
+		suppliers.find((s) => s.id === id)?.name ?? id.slice(0, 8) + "…";
+
+	const response = detail?.responses[0] ?? null;
+	const answers = response?.answers ?? {};
+
+	return (
+		<div>
+			<div className="flex items-center gap-3 py-5 border-b border-white/[0.05] mb-6">
+				<button
+					type="button"
+					onClick={onBack}
+					className="flex items-center gap-1.5 text-[12px] text-zinc-600 hover:text-zinc-300 transition-colors"
+				>
+					<ArrowLeft className="size-3.5" />
+					Questionnaires
+				</button>
+				<span className="text-zinc-700">/</span>
+				{loading ? (
+					<span className="text-[13px] text-zinc-600">Loading…</span>
+				) : (
+					<>
+						<h1 className="text-[15px] font-semibold text-white tracking-[-0.01em] flex-1 truncate">
+							{detail?.title ?? "—"}
+						</h1>
+						<div className="flex items-center gap-3 shrink-0">
+							{detail && <StatusChip status={detail.status} />}
+							{detail?.status === "draft" && (
+								<button
+									type="button"
+									onClick={() => onSend(detail.id)}
+									disabled={sending === detail?.id}
+									className="inline-flex items-center gap-1.5 text-[12px] font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] rounded px-2.5 py-1.5 transition-all disabled:opacity-40"
+								>
+									<Send className="size-3" />
+									{sending === detail?.id ? "Sending…" : "Send to supplier"}
+								</button>
+							)}
+						</div>
+					</>
+				)}
+			</div>
+
+			{loading ? (
+				<div className="flex items-center justify-center py-20">
+					<Loader2 className="size-4 animate-spin text-zinc-600" />
+				</div>
+			) : detail ? (
+				<div className="space-y-6">
+					{/* Metadata cards */}
+					<div className="grid grid-cols-4 gap-3">
+						<div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+							<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-1.5">Supplier</p>
+							<p className="text-[13px] font-medium text-zinc-200">{supplierName(detail.supplierId)}</p>
+						</div>
+						<div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+							<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-1.5">Due date</p>
+							<p className="text-[13px] font-mono text-zinc-200">{formatDate(detail.dueAt)}</p>
+						</div>
+						<div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+							<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-1.5">Sent</p>
+							<p className="text-[13px] font-mono text-zinc-200">{formatDate(detail.sentAt)}</p>
+						</div>
+						<div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+							<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-1.5">Responses</p>
+							<p className="text-[13px] font-medium text-zinc-200">
+								{detail.responses.length > 0 ? (
+									<span>
+										Submitted{" "}
+										<span className="text-zinc-500">{formatDate(response?.submittedAt ?? null)}</span>
+									</span>
+								) : (
+									<span className="text-zinc-600">None yet</span>
+								)}
+							</p>
+						</div>
+					</div>
+
+					{/* Questions + answers */}
+					<div>
+						<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">
+							Questions ({detail.questions.length})
+						</p>
+						<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] overflow-hidden">
+							<table className="w-full">
+								<thead>
+									<tr className="border-b border-white/[0.05]">
+										<th className="px-4 py-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] w-6">#</th>
+										<th className="px-4 py-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em]">Question</th>
+										<th className="px-4 py-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] w-16">Type</th>
+										<th className="px-4 py-2.5 text-left text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] w-48">Supplier answer</th>
+									</tr>
+								</thead>
+								<tbody>
+									{detail.questions.map((q, i) => {
+										const ans = answers[q.id];
+										const hasAnswer = ans !== null && ans !== undefined;
+										return (
+											<tr key={q.id} className="border-b border-white/[0.04] last:border-0">
+												<td className="px-4 py-3.5 text-[11px] font-mono text-zinc-600">{i + 1}</td>
+												<td className="px-4 py-3.5">
+													<p className="text-[13px] text-zinc-300 leading-relaxed">{q.text}</p>
+													{q.required && (
+														<span className="text-[10px] text-zinc-700 mt-0.5 inline-block">Required</span>
+													)}
+												</td>
+												<td className="px-4 py-3.5">
+													<span className="text-[11px] font-mono text-zinc-600 bg-white/[0.03] border border-white/[0.05] px-1.5 py-0.5 rounded">
+														{q.type}
+													</span>
+												</td>
+												<td className="px-4 py-3.5">
+													{hasAnswer ? (
+														<span className="text-[13px] text-zinc-200 font-medium">
+															{formatAnswer(ans)}
+														</span>
+													) : (
+														<span className="text-[12px] text-zinc-700 italic">
+															{detail.responses.length > 0 ? "Not answered" : "Awaiting response"}
+														</span>
+													)}
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			) : (
+				<p className="text-sm text-zinc-600">Questionnaire not found.</p>
+			)}
+		</div>
+	);
+}
+
+// ── Supplier detail page ──────────────────────────────────────────────────────
+
+function SupplierDetailPage({
+	supplier,
+	questionnaires,
+	onBack,
+	onSelectQuestionnaire,
+	onSend,
+	sending,
+}: {
+	supplier: Supplier;
+	questionnaires: Questionnaire[];
+	onBack: () => void;
+	onSelectQuestionnaire: (id: string) => void;
+	onSend: (id: string) => void;
+	sending: string | null;
+}) {
+	const qs = questionnaires.filter((q) => q.supplierId === supplier.id);
+	const completed = qs.filter((q) => q.status === "completed").length;
+	const sent = qs.filter((q) => q.status !== "draft").length;
+	const overdue = qs.filter((q) => q.status === "overdue").length;
+
+	return (
+		<div>
+			<div className="flex items-center gap-3 py-5 border-b border-white/[0.05] mb-6">
+				<button
+					type="button"
+					onClick={onBack}
+					className="flex items-center gap-1.5 text-[12px] text-zinc-600 hover:text-zinc-300 transition-colors"
+				>
+					<ArrowLeft className="size-3.5" />
+					Suppliers
+				</button>
+				<span className="text-zinc-700">/</span>
+				<h1 className="text-[15px] font-semibold text-white tracking-[-0.01em] flex-1">
+					{supplier.name}
+				</h1>
+				<span className="text-[11px] font-mono text-zinc-600 bg-white/[0.03] border border-white/[0.05] px-2 py-0.5 rounded">
+					{supplier.country}
+				</span>
+				{supplier.vatNumber && (
+					<span className="text-[11px] font-mono text-zinc-600">{supplier.vatNumber}</span>
+				)}
+			</div>
+
+			<div className="grid grid-cols-4 gap-3 mb-8">
+				<StatCard label="Questionnaires sent" value={sent} />
+				<StatCard label="Completed" value={completed} />
+				<StatCard label="Overdue" value={overdue} />
+				<StatCard label="Completion rate" value={sent > 0 ? `${Math.round((completed / sent) * 100)}%` : "—"} />
+			</div>
+
+			{qs.length === 0 ? (
+				<EmptyState
+					icon={FileText}
+					title="No questionnaires for this supplier"
+					description="Create a CSRD questionnaire and dispatch it to this supplier."
+				/>
+			) : (
+				<div>
+					<p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.1em] mb-3">
+						Questionnaires
+					</p>
+					<div className="rounded-lg border border-white/[0.06] bg-white/[0.015] overflow-hidden">
+						<table className="w-full">
+							<thead>
+								<tr className="border-b border-white/[0.05]">
+									{["Title", "Status", "Due", "Sent", ""].map((h, i) => (
+										<th
+											key={i}
+											className={`px-4 py-2.5 text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] ${
+												i === 4 ? "text-right" : "text-left"
+											}`}
+										>
+											{h}
+										</th>
+									))}
+								</tr>
+							</thead>
+							<tbody>
+								{qs.map((q) => (
+									<tr
+										key={q.id}
+										onClick={() => onSelectQuestionnaire(q.id)}
+										className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors cursor-pointer"
+									>
+										<td className="px-4 py-3 text-[13px] font-medium text-zinc-200">{q.title}</td>
+										<td className="px-4 py-3"><StatusChip status={q.status} /></td>
+										<td className="px-4 py-3 font-mono text-[12px] text-zinc-600">{formatDate(q.dueAt)}</td>
+										<td className="px-4 py-3 font-mono text-[12px] text-zinc-600">{formatDate(q.sentAt)}</td>
+										<td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+											{q.status === "draft" && (
+												<button
+													type="button"
+													onClick={() => onSend(q.id)}
+													disabled={sending === q.id}
+													className="inline-flex items-center gap-1.5 text-[12px] font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] rounded px-2.5 py-1.5 transition-all disabled:opacity-40"
+												>
+													<Send className="size-3" />
+													{sending === q.id ? "Sending…" : "Send"}
+												</button>
+											)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function EnterpriseApp() {
@@ -931,7 +1238,16 @@ export default function EnterpriseApp() {
 	const [esrsGenerating, setEsrsGenerating] = useState(false);
 	const [sending, setSending] = useState<string | null>(null);
 	const [page, setPage] = useState<EnterprisePage>("overview");
+	const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<string | null>(null);
+	const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+	const [detailRefreshKey, setDetailRefreshKey] = useState(0);
 	const esrsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	function navigate(p: EnterprisePage) {
+		setPage(p);
+		setSelectedQuestionnaireId(null);
+		setSelectedSupplierId(null);
+	}
 
 	useEffect(() => {
 		fetch("/api/enterprise/me").then((r) => {
@@ -996,6 +1312,7 @@ export default function EnterpriseApp() {
 			setQuestionnaires((prev) =>
 				prev.map((q) => (q.id === id ? (updated as Questionnaire) : q)),
 			);
+			setDetailRefreshKey((k) => k + 1);
 		}
 		setSending(null);
 	}
@@ -1010,13 +1327,13 @@ export default function EnterpriseApp() {
 				<PaxisLogo />
 				<div className="w-px h-4 bg-white/[0.08] mx-5" />
 				<nav className="flex items-center -mb-px">
-					<NavBtn active={page === "overview"} onClick={() => setPage("overview")}>
+					<NavBtn active={page === "overview"} onClick={() => navigate("overview")}>
 						<LayoutGrid className="size-3.5" />
 						Overview
 					</NavBtn>
 					<NavBtn
 						active={page === "suppliers"}
-						onClick={() => setPage("suppliers")}
+						onClick={() => navigate("suppliers")}
 						badge={suppliers.length}
 					>
 						<Building2 className="size-3.5" />
@@ -1024,7 +1341,7 @@ export default function EnterpriseApp() {
 					</NavBtn>
 					<NavBtn
 						active={page === "questionnaires"}
-						onClick={() => setPage("questionnaires")}
+						onClick={() => navigate("questionnaires")}
 						badge={questionnaires.length}
 					>
 						<FileText className="size-3.5" />
@@ -1032,7 +1349,7 @@ export default function EnterpriseApp() {
 					</NavBtn>
 					<NavBtn
 						active={page === "esrs"}
-						onClick={() => setPage("esrs")}
+						onClick={() => navigate("esrs")}
 					>
 						<BarChart3 className="size-3.5" />
 						ESRS Report
@@ -1067,19 +1384,49 @@ export default function EnterpriseApp() {
 						scope3={scope3}
 					/>
 				)}
-				{page === "suppliers" && (
+				{page === "suppliers" && !selectedSupplierId && (
 					<SuppliersPage
 						suppliers={suppliers}
 						onAdded={(s) => setSuppliers((prev) => [...prev, s])}
+						onSelect={setSelectedSupplierId}
 					/>
 				)}
-				{page === "questionnaires" && (
+				{page === "suppliers" && selectedSupplierId && (() => {
+					const supplier = suppliers.find((s) => s.id === selectedSupplierId);
+					if (!supplier) return null;
+					return (
+						<SupplierDetailPage
+							supplier={supplier}
+							questionnaires={questionnaires}
+							onBack={() => setSelectedSupplierId(null)}
+							onSelectQuestionnaire={(id) => {
+								setSelectedSupplierId(null);
+								setPage("questionnaires");
+								setSelectedQuestionnaireId(id);
+							}}
+							onSend={sendQuestionnaire}
+							sending={sending}
+						/>
+					);
+				})()}
+				{page === "questionnaires" && !selectedQuestionnaireId && (
 					<QuestionnairesPage
 						questionnaires={questionnaires}
 						suppliers={suppliers}
 						onCreated={(q) => setQuestionnaires((prev) => [q, ...prev])}
 						onSend={sendQuestionnaire}
+						onSelect={setSelectedQuestionnaireId}
 						sending={sending}
+					/>
+				)}
+				{page === "questionnaires" && selectedQuestionnaireId && (
+					<QuestionnaireDetailPage
+						questionnaireId={selectedQuestionnaireId}
+						suppliers={suppliers}
+						onBack={() => setSelectedQuestionnaireId(null)}
+						onSend={sendQuestionnaire}
+						sending={sending}
+						refreshKey={detailRefreshKey}
 					/>
 				)}
 				{page === "esrs" && (
