@@ -19,7 +19,7 @@ External LLM calls (Gemini, Featherless) are mocked at the `src/lib/llm.ts` abst
 
 ## Local Test DB
 
-The `db-test` service in `compose.yml` provides an ephemeral Postgres 18 instance on port 5433. It uses `tmpfs` — data does not persist between `docker compose down` cycles, which keeps tests fast and state-free.
+The `db-test` service in `compose.yml` provides an ephemeral Postgres 18 instance on port 15152. It uses `tmpfs` — data does not persist between `docker compose down` cycles, which keeps tests fast and state-free.
 
 Start it before running tests:
 
@@ -40,16 +40,16 @@ Loaded via `bunfig.toml` preload. Runs migrations against the test DB and trunca
 docker compose up db-test -d
 
 # apply schema to test DB (required on first run or after schema changes)
-DATABASE_URL=postgres://paxis:paxis@localhost:5433/paxis_test bun run db:push
+DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun run db:push
 
 # all tests
-DATABASE_URL=postgres://paxis:paxis@localhost:5433/paxis_test bun test
+DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test
 
 # watch mode
-DATABASE_URL=postgres://paxis:paxis@localhost:5433/paxis_test bun test --watch
+DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test --watch
 
 # single file or directory
-DATABASE_URL=postgres://paxis:paxis@localhost:5433/paxis_test bun test src/agents/carbon
+DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test src/agents/carbon
 ```
 
 ## Conventions

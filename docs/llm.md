@@ -39,7 +39,7 @@
 ```
 /
 ├── src/
-│   ├── index.ts                   # Bun.serve entry point (port 3000)
+│   ├── index.ts                   # Bun.serve entry point (port 15150)
 │   ├── routes/                    # API routes
 │   │   ├── auth.ts                # Better Auth routes
 │   │   ├── enterprise/            # Enterprise dashboard API
@@ -84,7 +84,7 @@ docker compose up
 docker compose up db-test -d
 
 # run tests against the test DB
-DATABASE_URL=postgres://paxis:paxis@localhost:5433/paxis_test bun test
+DATABASE_URL=postgres://paxis:paxis@localhost:15152/paxis_test bun test
 ```
 
 Copy `.env` and set at minimum `GEMINI_API_KEY`. `BETTER_AUTH_SECRET` defaults to a dev placeholder in compose — override it in `.env` for any auth testing.

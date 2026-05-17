@@ -7,7 +7,7 @@ const isProd = Bun.env.NODE_ENV === "production";
 const client = postgres(
 	isProd
 		? "postgres:///paxis?host=/var/run/postgresql"
-		: (Bun.env.DATABASE_URL ?? "postgres://paxis:paxis@localhost:5432/paxis"),
+		: (Bun.env.DATABASE_URL ?? "postgres://paxis:paxis@localhost:15151/paxis"),
 );
 
 export const db = client;

@@ -8,7 +8,7 @@ Paxis is a two-sided EU compliance OS: enterprises dispatch CSRD questionnaires 
 
 ```
 Browser
-  └── Bun.serve() (port 3000)
+  └── Bun.serve() (port 15150 dev / unix socket prod)
         ├── HTML routes ──────────── React frontend (enterprise + supplier)
         └── API routes
               ├── /auth/*            ← Better Auth (sessions, OAuth)
@@ -53,7 +53,7 @@ A typical enterprise Scope 3 questionnaire dispatch:
 
 | Package | Responsibility |
 |---------|---------------|
-| `src/index.ts` | `Bun.serve()` entry; registers all routes; starts server on port 3000 |
+| `src/index.ts` | `Bun.serve()` entry; registers all routes; starts server on port 15150 |
 | `src/routes/auth.ts` | Better Auth handler — sessions, OAuth, role assignment |
 | `src/routes/enterprise/` | Questionnaire dispatch, Scope 3 dashboard, ESRS export |
 | `src/routes/supplier/` | Questionnaire responses, AI Act inventory, carbon entries |

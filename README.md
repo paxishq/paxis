@@ -48,7 +48,7 @@
 ├── LICENSE                           # MIT
 │
 ├── src/
-│   ├── index.ts                      # Bun.serve entry point (port 3000)
+│   ├── index.ts                      # Bun.serve entry point (15150 dev / unix socket prod)
 │   ├── routes/                       # API routes
 │   │   ├── auth.ts                   # Better Auth routes
 │   │   ├── enterprise/               # Enterprise dashboard routes
@@ -175,7 +175,7 @@ Schema changes: `bun run db:push` (never hand-edit migration files).
 - **Instance:** Vultr VX1, Ubuntu 26.04 LTS x86_64
 - **TLS:** Caddy with DNS-01 challenge via Cloudflare API token — port 80 intentionally closed
 - **Domain:** getpaxis.com → Cloudflare DNS (grey cloud, not proxied) → Vultr instance IP
-- **Reverse proxy:** Caddy → `localhost:3000` (Bun server)
+- **Reverse proxy:** Caddy → `unix//run/paxis/app.sock` (Bun server)
 - **Database:** PostgreSQL 18 (Ubuntu 26.04 default), localhost only
 - **Secrets:** `/etc/paxis.env` (600, root only); `/etc/caddy/env` (600, caddy:caddy)
 - **Provisioning:** cloud-init on first boot → `paxis-deploy-key.sh` (manual, once) → `paxis-setup.sh` (idempotent, via GitHub Actions)
