@@ -16,17 +16,26 @@ export interface GenerateOptions {
 	temperature?: number;
 }
 
-// ── Model IDs ─────────────────────────────────────────────────────────────────
+// ── Model IDs — override via env to match what's live in your GCP project ─────
 
 const GEMINI_MODELS: Record<ModelTier, string> = {
-	pro: "gemini-3.1-pro",
-	flash: "gemini-3.1-flash",
+	pro:   Bun.env.GEMINI_PRO_MODEL   ?? "gemini-2.5-pro",
+	flash: Bun.env.GEMINI_FLASH_MODEL ?? "gemini-2.5-flash",
 };
 
-// ── Provider clients (lazy — only instantiated when called) ───────────────────
+// ── Provider clients (lazy) ───────────────────────────────────────────────────
 
 function gemini() {
-	return new GoogleGenAI({ apiKey: Bun.env.GEMINI_API_KEY! });
+	// Dev: GEMINI_API_KEY set → AI Studio (API key, no GCP project needed)
+	if (Bun.env.GEMINI_API_KEY) {
+		return new GoogleGenAI({ apiKey: Bun.env.GEMINI_API_KEY });
+	}
+	// Prod: no API key → Vertex AI with Application Default Credentials
+	return new GoogleGenAI({
+		vertexai: true,
+		project:  Bun.env.GOOGLE_CLOUD_PROJECT,
+		location: Bun.env.GOOGLE_CLOUD_LOCATION ?? "us-central1",
+	});
 }
 
 function featherless() {
