@@ -122,6 +122,8 @@ async function executeStep(
 	const context = {
 		enterpriseId: "enterpriseId" in task ? task.enterpriseId : undefined,
 		supplierId: "supplierId" in task ? task.supplierId : undefined,
+		questionnaireId: "questionnaireId" in task ? task.questionnaireId : undefined,
+		responseId: "responseId" in task ? task.responseId : undefined,
 	};
 
 	try {
