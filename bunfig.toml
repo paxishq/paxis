@@ -1,6 +1,9 @@
 [run]
 bun = true
 
+[install]
+trustedDependencies = ["bun", "@node-rs/argon2", "@node-rs/bcrypt", "esbuild", "sharp"]
+
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
 
