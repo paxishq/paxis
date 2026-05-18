@@ -102,12 +102,20 @@ function PendingActionCard({
   dismissed,
 }: {
   action: PendingAction;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   onDismiss: () => void;
   confirmed: boolean;
   dismissed: boolean;
 }) {
+  const [executing, setExecuting] = useState(false);
+
   if (dismissed) return null;
+
+  async function handleConfirmClick() {
+    setExecuting(true);
+    await onConfirm();
+  }
+
   return (
     <div className="mt-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2.5">
       <p className="text-[11px] font-medium text-emerald-400 mb-1.5">
@@ -125,16 +133,22 @@ function PendingActionCard({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onConfirm}
-            className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 hover:bg-emerald-900/50 border border-emerald-800/50 rounded px-2 py-1 transition-colors"
+            onClick={handleConfirmClick}
+            disabled={executing}
+            className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 hover:bg-emerald-900/50 border border-emerald-800/50 rounded px-2 py-1 transition-colors disabled:opacity-50"
           >
-            <Check className="size-3" />
-            Confirm
+            {executing ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Check className="size-3" />
+            )}
+            {executing ? "Confirming…" : "Confirm"}
           </button>
           <button
             type="button"
             onClick={onDismiss}
-            className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors"
+            disabled={executing}
+            className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-50"
           >
             Dismiss
           </button>
@@ -173,8 +187,8 @@ export function Assistant({
   async function handleConfirm(index: number) {
     const msg = messages[index];
     if (!msg?.pendingAction) return;
-    const ok = await executeAction(msg.pendingAction);
-    updateMessage(index, { pendingConfirmed: ok });
+    await executeAction(msg.pendingAction);
+    updateMessage(index, { pendingConfirmed: true });
   }
 
   async function send() {
@@ -350,13 +364,6 @@ export function Assistant({
                       </ReactMarkdown>
                     </div>
                   )}
-                  {msg.role === "assistant" &&
-                    msg.toolsUsed &&
-                    msg.toolsUsed.length > 0 && (
-                      <p className="mt-1 text-[10px] text-zinc-700 px-1">
-                        Data: {msg.toolsUsed.join(", ")}
-                      </p>
-                    )}
                   {msg.pendingAction && (
                     <PendingActionCard
                       action={msg.pendingAction}
