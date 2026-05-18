@@ -6,6 +6,8 @@ Wants=postgresql.service
 [Service]
 Type=simple
 User=paxis
+Group=caddy
+UMask=0117
 WorkingDirectory=/home/paxis/app
 EnvironmentFile=/etc/paxis.env
 ExecStart=/home/paxis/app/paxis
