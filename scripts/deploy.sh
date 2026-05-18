@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# Idempotent deploy — run on the server as the paxis user.
-# Pulls latest code, rebuilds binary, and restarts the service.
 set -euo pipefail
 
-cd /home/paxis/app
+BUN="${HOME}/.bun/bin/bun"
+APP="/home/paxis/app"
+
+cd "$APP"
 
 echo ">>> Pulling latest code..."
 git pull
 
 echo ">>> Installing dependencies..."
-bun install --frozen-lockfile
+"$BUN" install --frozen-lockfile
 
 echo ">>> Applying schema migrations..."
-bun run db:push
+source /etc/paxis.env
+"$BUN" x drizzle-kit push
 
 echo ">>> Building binary..."
-bun run build
+"$BUN" run build
 
 echo ">>> Restarting service..."
 sudo systemctl restart paxis
