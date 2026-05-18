@@ -92,8 +92,8 @@ source /etc/paxis.env
 cat > /etc/paxis.env << APPENV
 # Database — generated on first run, do not modify
 PAXIS_DB_PASSWORD=${PAXIS_DB_PASSWORD}
-# Unix socket connection — peer auth, no password needed on prod
-DATABASE_URL=postgres:///paxis?host=/var/run/postgresql
+# TCP connection with password — Bun's SQL driver does not support unix peer auth
+DATABASE_URL=postgres://paxis:${PAXIS_DB_PASSWORD}@localhost:5432/paxis
 
 # Runtime
 NODE_ENV=production
