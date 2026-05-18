@@ -1,3 +1,4 @@
+import { unlinkSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
@@ -270,6 +271,10 @@ function registerAllTools(
 export function startMcpServer() {
   const isProd = Bun.env.NODE_ENV === "production";
   const port = Number(Bun.env.MCP_PORT ?? 15151);
+
+  if (isProd) {
+    try { unlinkSync("/run/paxis/mcp.sock"); } catch {}
+  }
 
   const serveOptions = isProd
     ? { unix: "/run/paxis/mcp.sock" as const }
