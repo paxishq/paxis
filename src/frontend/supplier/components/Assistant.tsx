@@ -316,9 +316,12 @@ export function Assistant({
                           a: ({ href, children }) => (
                             <a
                               href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (href) window.open(href, "_blank", "noreferrer");
+                              }}
+                              className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300 cursor-pointer"
                             >
                               {children}
                             </a>
