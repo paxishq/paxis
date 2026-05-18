@@ -6,8 +6,14 @@ APP="/home/paxis/app"
 
 cd "$APP"
 
-echo ">>> Pulling latest code..."
-git pull
+# Pull first, then re-exec so the rest of the script runs from the updated file.
+# Bash reads scripts lazily from disk — if git pull replaces this file while it
+# is executing, subsequent commands read from the old inode (stale content).
+if [ "${PAXIS_SKIP_PULL:-}" != "1" ]; then
+  echo ">>> Pulling latest code..."
+  git pull
+  exec env PAXIS_SKIP_PULL=1 bash "$0" "$@"
+fi
 
 echo ">>> Installing dependencies..."
 "$BUN" install --frozen-lockfile
