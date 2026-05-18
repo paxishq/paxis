@@ -23,6 +23,8 @@ if (!result.success) {
 
 // Bun names the binary after the entrypoint dir ("src") in compile mode
 const binary = result.outputs[0].path;
+// Unlink before copy so a running paxis process keeps its inode (ETXTBSY)
+try { unlinkSync("./paxis"); } catch {}
 copyFileSync(binary, "./paxis");
 unlinkSync(binary);
 Bun.spawnSync(["chmod", "+x", "./paxis"]);
