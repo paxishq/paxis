@@ -10,6 +10,7 @@ Group=caddy
 UMask=0117
 WorkingDirectory=/home/paxis/app
 EnvironmentFile=/etc/paxis.env
+ExecStartPre=-/bin/rm -f /run/paxis/app.sock /run/paxis/mcp.sock
 ExecStart=/home/paxis/app/paxis
 Restart=on-failure
 RestartSec=5
