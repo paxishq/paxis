@@ -62,7 +62,8 @@ if [ ! -f /etc/paxis.env ]; then
 PAXIS_DB_PASSWORD=${DB_PASS}
 DATABASE_URL=postgres://paxis:${DB_PASS}@localhost:5432/paxis
 DBENV
-  chmod 600 /etc/paxis.env
+  chown root:paxis /etc/paxis.env
+  chmod 640 /etc/paxis.env
 
   sudo -u postgres psql -c "DO \$\$ BEGIN
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'paxis') THEN
@@ -112,7 +113,8 @@ GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
 FEATHERLESS_API_KEY=${FEATHERLESS_API_KEY}
 FEATHERLESS_MODEL=${FEATHERLESS_MODEL}
 APPENV
-chmod 600 /etc/paxis.env
+chown root:paxis /etc/paxis.env
+chmod 640 /etc/paxis.env
 echo "    App environment written to /etc/paxis.env"
 
 echo ">>> [7/9] Installing systemd unit..."
