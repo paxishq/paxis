@@ -27,7 +27,8 @@ ssh-keygen -t ed25519 -C "paxis-server-deploy" -f ~/.ssh/github_deploy -N ""
 
 echo ">>> Writing SSH config..."
 cat > ~/.ssh/config << 'SSHCONFIG'
-Host github.com
+Host github-paxis
+  HostName github.com
   IdentityFile ~/.ssh/github_deploy
   IdentityOnly yes
   StrictHostKeyChecking accept-new

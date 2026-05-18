@@ -38,7 +38,7 @@ write_files:
       [DEFAULT]
       bantime = 1h
       findtime = 10m
-      maxretry = 3
+      maxretry = 5
 
       [sshd]
       enabled = true
@@ -64,6 +64,34 @@ write_files:
       net.ipv6.conf.all.accept_redirects = 0
       net.ipv4.conf.all.send_redirects = 0
       kernel.randomize_va_space = 2
+
+  - path: /home/paxis/deploy-key.sh
+    owner: paxis:paxis
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      if [ "$EUID" -eq 0 ]; then
+        echo "Run as the paxis user, not root." && exit 1
+      fi
+      if [ -f ~/.ssh/github_deploy ]; then
+        echo "Deploy key already exists:"; cat ~/.ssh/github_deploy.pub; exit 0
+      fi
+      echo ">>> Generating GitHub deploy key..."
+      ssh-keygen -t ed25519 -C "paxis-server-deploy" -f ~/.ssh/github_deploy -N ""
+      cat > ~/.ssh/config << 'SSHCONFIG'
+      Host github-paxis
+        HostName github.com
+        IdentityFile ~/.ssh/github_deploy
+        IdentityOnly yes
+        StrictHostKeyChecking accept-new
+      SSHCONFIG
+      chmod 600 ~/.ssh/config
+      echo ""; echo "Add this deploy key to github.com/paxishq/paxis -> Settings -> Deploy keys:"
+      echo ""; cat ~/.ssh/github_deploy.pub; echo ""
+      read -p "Press ENTER once the deploy key has been added to GitHub..."
+      ssh -T git@github-paxis || true
+      echo "Deploy key setup complete."
 
   - path: /etc/caddy/Caddyfile
     owner: root:root

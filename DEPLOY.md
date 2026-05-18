@@ -138,10 +138,10 @@ ssh root@<server-ip>
 su - paxis
 ```
 
-Run the deploy key script:
+Run the deploy key script (pre-installed by cloud-init at `~/deploy-key.sh`):
 
 ```sh
-bash ~/scripts/deploy-key.sh
+bash ~/deploy-key.sh
 ```
 
 It generates an Ed25519 SSH key and prints the public key. Copy the printed public key, then:
@@ -176,12 +176,10 @@ This configures Caddy, PostgreSQL, the systemd service, and writes all secrets t
 
 ```sh
 cd ~/app
-bun install --frozen-lockfile
-bun run db:push
-bun run build
-sudo systemctl enable --now paxis
-sudo systemctl status paxis
+bash scripts/deploy.sh
 ```
+
+`deploy.sh` installs deps, applies schema migrations, builds the binary, updates the service file, and restarts the service safely.
 
 Caddy will obtain a TLS certificate on the first HTTPS request. Give it 30–60 seconds on first boot.
 
