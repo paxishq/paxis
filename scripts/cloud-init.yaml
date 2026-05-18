@@ -25,8 +25,8 @@ users:
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys:
-      - YOUR_PUBLIC_SSH_KEY_HERE
-      - TEAMMATE_PUBLIC_SSH_KEY_HERE
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGWZbGQPJCFk1i7ljrt/MbWvZATkSKKzJz8nksd0OebK github@oheriko.com
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEbns6qvegkBOwPiU/yVZQ0zBlhKNS3Py73TbTB6SzWU ericmuckley@gmail.com
 
 write_files:
   - path: /etc/ssh/sshd_config.d/hardened.conf
@@ -80,6 +80,10 @@ write_files:
 
       getpaxis.com {
         reverse_proxy unix//run/paxis/app.sock
+      }
+
+      mcp.getpaxis.com {
+        reverse_proxy unix//run/paxis/mcp.sock
       }
 
   # Placeholder — real token injected by paxis-setup.sh post-boot

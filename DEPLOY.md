@@ -29,13 +29,16 @@ Deploy the instance and note the assigned **public IPv4 address** — you'll nee
 
 In [Cloudflare](https://dash.cloudflare.com), go to the `getpaxis.com` zone → **DNS** → **Records**.
 
-Add an A record:
+Add two A records:
 
 | Type | Name | Content | Proxy status |
 |------|------|---------|--------------|
 | A | `@` | `<Vultr IP>` | **DNS only** (grey cloud) |
+| A | `mcp` | `<Vultr IP>` | **DNS only** (grey cloud) |
 
-The proxy must be **off** (grey cloud, not orange). Caddy handles TLS directly via DNS-01 challenge — Cloudflare proxying would break this.
+Both proxy settings must be **off** (grey cloud, not orange). Caddy handles TLS directly via DNS-01 challenge — Cloudflare proxying would break this.
+
+`mcp.getpaxis.com` exposes the MCP server for external agents (Claude Desktop, Cursor). Caddy reverse-proxies it to the MCP unix socket at `/run/paxis/mcp.sock`.
 
 Propagation is usually instant through Cloudflare but can take a few minutes. You can verify with:
 
@@ -225,6 +228,7 @@ psql -d paxis -c "SELECT id, name FROM suppliers;"
 
 - [ ] Vultr VX1 provisioned with `cloud-init.yaml`, cloud-init finished successfully
 - [ ] `getpaxis.com` A record → Vultr IP, DNS-only (grey cloud)
+- [ ] `mcp.getpaxis.com` A record → Vultr IP, DNS-only (grey cloud)
 - [ ] Cloudflare API token created, scoped to `getpaxis.com` zone DNS
 - [ ] Google Cloud OAuth credentials created with `https://getpaxis.com/api/auth/callback/google` redirect URI
 - [ ] Gemini API key ready

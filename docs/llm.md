@@ -95,8 +95,6 @@
 │       └── supplier/              # Supplier portal React app
 │           └── components/
 │               └── Assistant.tsx  # Floating chat widget — Bot button, pendingAction confirm/dismiss
-├── infra/
-│   └── main.tf                    # OpenTofu — Vultr VM + networking
 ├── DEPLOY.md                      # Manual production deploy checklist (Vultr + Cloudflare + OAuth)
 └── scripts/
     ├── cloud-init.yaml            # Vultr instance provisioning (cloud-init)
