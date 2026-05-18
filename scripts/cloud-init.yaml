@@ -1,9 +1,4 @@
 #cloud-config
-# Target: Ubuntu 26.04 LTS (Resolute) x86_64
-# PostgreSQL 18 ships in Ubuntu 26.04 default repos — no PGDG needed
-# Caddy built from source with Cloudflare DNS plugin via xcaddy
-# Port 80 intentionally closed — cert provisioning via DNS-01 challenge
-# Secrets and user-specific setup NOT in this file — run paxis-setup.sh after first boot
 
 package_update: true
 package_upgrade: true
@@ -86,69 +81,34 @@ write_files:
         reverse_proxy unix//run/paxis/mcp.sock
       }
 
-  # Placeholder — real token injected by paxis-setup.sh post-boot
   - path: /etc/caddy/env
     owner: root:root
     permissions: '0600'
     content: |
       CF_API_TOKEN=PLACEHOLDER
 
-  # Drop-in to inject CF_API_TOKEN into the Caddy systemd service
   - path: /etc/systemd/system/caddy.service.d/env.conf
     content: |
       [Service]
       EnvironmentFile=/etc/caddy/env
 
 runcmd:
-  # Firewall — SSH and HTTPS only, port 80 intentionally excluded
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow ssh
   - ufw allow 443/tcp
   - ufw --force enable
-
-  # Apply sysctl hardening
   - sysctl -p /etc/sysctl.d/99-hardening.conf
-
-  # Restart SSH with hardened config
   - systemctl restart sshd
-
-  # Enable fail2ban
   - systemctl enable fail2ban
   - systemctl start fail2ban
-
-  # Enable unattended security upgrades
   - systemctl enable unattended-upgrades
-
-  # Install Go (official upstream — Ubuntu's golang-go package lags behind)
-  - curl -fsSL https://go.dev/dl/go1.26.3.linux-amd64.tar.gz -o /tmp/go.tar.gz
-  - rm -rf /usr/local/go
-  - tar -C /usr/local -xzf /tmp/go.tar.gz
-  - echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile.d/golang.sh
-  - rm /tmp/go.tar.gz
-
-  # Install xcaddy (GOPATH explicit to avoid path ambiguity running as root)
-  - GOPATH=/root/go /usr/local/go/bin/go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-
-  # Build Caddy with Cloudflare DNS plugin
-  - GOPATH=/root/go /root/go/bin/xcaddy build --with github.com/caddy-dns/cloudflare --output /usr/bin/caddy
+  - curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com%2Fcaddy-dns%2Fcloudflare" -o /usr/bin/caddy
   - chmod +x /usr/bin/caddy
-
-  # Create caddy system user/group before installing the service file
   - groupadd --system caddy
   - useradd --system --gid caddy --create-home --home-dir /var/lib/caddy --shell /usr/sbin/nologin --comment "Caddy web server" caddy
-
-  # Fix ownership of caddy config now that caddy user exists
   - chown caddy:caddy /etc/caddy/Caddyfile
   - chown caddy:caddy /etc/caddy/env
-
-  # Download official Caddy systemd service file
-  # Uses AmbientCapabilities=CAP_NET_BIND_SERVICE — no setcap needed
   - curl -fsSL https://raw.githubusercontent.com/caddyserver/dist/master/init/caddy.service -o /etc/systemd/system/caddy.service
-
-  # Reload systemd so it picks up caddy.service + drop-in override
   - systemctl daemon-reload
   - systemctl enable caddy
-  # Note: Caddy starts with placeholder token — run paxis-setup.sh to inject real token and restart
-
-  # Note: Bun, Postgres, and app env configured by paxis-setup.sh post-boot

@@ -69,7 +69,7 @@ DBENV
       CREATE USER paxis WITH PASSWORD '${DB_PASS}';
     END IF;
   END \$\$;"
-  sudo -u postgres psql -c "SELECT 'CREATE DATABASE paxis OWNER paxis' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'paxis')\gexec"
+  sudo -u postgres psql -c "CREATE DATABASE paxis OWNER paxis;" 2>/dev/null || true
   sudo -u postgres psql -c "REVOKE ALL ON DATABASE paxis FROM public;"
 else
   echo "    Postgres already configured, skipping."
