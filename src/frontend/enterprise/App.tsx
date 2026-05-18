@@ -4,6 +4,7 @@ import {
   BarChart3,
   Building2,
   CheckCircle2,
+  ChevronRight,
   FileText,
   LayoutGrid,
   Leaf,
@@ -1015,6 +1016,17 @@ const FLAG_TYPE_LABEL: Record<RiskFlag["type"], string> = {
   compliance: "Compliance",
 };
 
+const FLAG_TYPE_CONTEXT: Record<RiskFlag["type"], string> = {
+  deadline:
+    "CSRD requires timely submission of ESRS reports. Missing a filing deadline can result in regulatory penalties. Ensure all supplier questionnaires have been dispatched and responses collected before the deadline.",
+  data_gap:
+    "One or more suppliers have not provided the emissions data required for your Scope 3 calculation. Incomplete data reduces the accuracy and assurance level of your ESRS report.",
+  threshold_breach:
+    "Your reported emissions exceed a material threshold. This may affect your ESRS E1 disclosures or trigger additional reporting obligations. Review your Scope 1, 2, and 3 figures for accuracy.",
+  compliance:
+    "A compliance issue has been identified in your supply chain — this may relate to EU AI Act inventory gaps, missing certifications, or unresolved questionnaire responses.",
+};
+
 function RiskPanel({
   risk,
   assessing,
@@ -1024,6 +1036,8 @@ function RiskPanel({
   assessing: boolean;
   onAssess: () => void;
 }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
   const assessBtn = (
     <button
       type="button"
@@ -1125,27 +1139,51 @@ function RiskPanel({
         <div className="space-y-1.5">
           {risk.flags.map((flag, i) => {
             const flagCfg = RISK_CFG[flag.severity];
+            const isOpen = openIndex === i;
             return (
               <div
                 key={i}
-                className="rounded-md border border-white/[0.05] bg-white/[0.02] px-3 py-2.5"
+                className="rounded-md border border-white/[0.05] bg-white/[0.02] overflow-hidden"
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${flagCfg.bg} ${flagCfg.color}`}
-                  >
-                    {FLAG_TYPE_LABEL[flag.type]}
-                  </span>
-                  <span className={`text-[10px] font-medium ${flagCfg.color}`}>
-                    {flagCfg.label}
-                  </span>
-                </div>
-                <p className="text-[12px] text-zinc-300 leading-relaxed">
-                  {flag.description}
-                </p>
-                <p className="text-[11px] text-zinc-600 mt-1 leading-relaxed">
-                  → {flag.recommendation}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-white/[0.04] transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${flagCfg.bg} ${flagCfg.color}`}
+                      >
+                        {FLAG_TYPE_LABEL[flag.type]}
+                      </span>
+                      <span className={`text-[10px] font-medium ${flagCfg.color}`}>
+                        {flagCfg.label}
+                      </span>
+                    </div>
+                    <ChevronRight
+                      className={`size-3.5 text-zinc-600 transition-transform shrink-0 ${isOpen ? "rotate-90" : ""}`}
+                    />
+                  </div>
+                  <p className="text-[12px] text-zinc-300 leading-relaxed">
+                    {flag.description}
+                  </p>
+                </button>
+                {isOpen && (
+                  <div className="px-3 pb-3 border-t border-white/[0.05] pt-2.5 space-y-2">
+                    <div>
+                      <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-[0.08em] mb-1">
+                        Recommended action
+                      </p>
+                      <p className="text-[12px] text-zinc-400 leading-relaxed">
+                        {flag.recommendation}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 leading-relaxed">
+                      {FLAG_TYPE_CONTEXT[flag.type]}
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })}
