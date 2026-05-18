@@ -1,5 +1,5 @@
 import { Bot, Check, Loader2, Send, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -158,6 +158,11 @@ export function Assistant({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   function updateMessage(index: number, patch: Partial<Message>) {
     setMessages((prev) =>
@@ -370,6 +375,7 @@ export function Assistant({
                 </div>
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
 
           {/* Input */}
