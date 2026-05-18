@@ -1,5 +1,7 @@
 import { Bot, Check, Loader2, Send, X } from "lucide-react";
 import { useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -250,15 +252,96 @@ export function Assistant({
                 <div
                   className={`max-w-[85%] ${msg.role === "user" ? "w-auto" : "w-full"}`}
                 >
-                  <div
-                    className={`rounded-xl px-3 py-2 text-[12px] leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-emerald-600 text-white"
-                        : "bg-zinc-800 text-zinc-200"
-                    }`}
-                  >
-                    {msg.content}
-                  </div>
+                  {msg.role === "user" ? (
+                    <div className="rounded-xl px-3 py-2 text-[12px] leading-relaxed bg-emerald-600 text-white">
+                      {msg.content}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl px-3 py-2 text-[12px] leading-relaxed bg-zinc-800 text-zinc-200 prose-assistant">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => (
+                            <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="mb-2 last:mb-0 pl-4 space-y-0.5 list-disc">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="mb-2 last:mb-0 pl-4 space-y-0.5 list-decimal">{children}</ol>
+                          ),
+                          li: ({ children }) => (
+                            <li className="leading-relaxed">{children}</li>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-semibold text-white">{children}</strong>
+                          ),
+                          em: ({ children }) => (
+                            <em className="italic text-zinc-300">{children}</em>
+                          ),
+                          code: ({ children, className }) => {
+                            const isBlock = className?.includes("language-");
+                            return isBlock ? (
+                              <code className="block bg-zinc-900 rounded px-2 py-1.5 text-[11px] font-mono text-emerald-300 my-2 whitespace-pre-wrap overflow-x-auto">
+                                {children}
+                              </code>
+                            ) : (
+                              <code className="bg-zinc-900 rounded px-1 py-0.5 text-[11px] font-mono text-emerald-300">
+                                {children}
+                              </code>
+                            );
+                          },
+                          pre: ({ children }) => (
+                            <pre className="my-2">{children}</pre>
+                          ),
+                          h1: ({ children }) => (
+                            <p className="font-semibold text-white mb-1">{children}</p>
+                          ),
+                          h2: ({ children }) => (
+                            <p className="font-semibold text-white mb-1">{children}</p>
+                          ),
+                          h3: ({ children }) => (
+                            <p className="font-medium text-zinc-200 mb-1">{children}</p>
+                          ),
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-2 border-emerald-700 pl-2 text-zinc-400 my-2">
+                              {children}
+                            </blockquote>
+                          ),
+                          a: ({ href, children }) => (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+                            >
+                              {children}
+                            </a>
+                          ),
+                          hr: () => (
+                            <hr className="border-zinc-700 my-2" />
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto my-2">
+                              <table className="text-[11px] border-collapse w-full">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-zinc-700 px-2 py-1 text-left font-semibold text-zinc-300 bg-zinc-900">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-zinc-700 px-2 py-1 text-zinc-400">
+                              {children}
+                            </td>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                   {msg.role === "assistant" &&
                     msg.toolsUsed &&
                     msg.toolsUsed.length > 0 && (
