@@ -9,7 +9,7 @@ echo ">>> Pulling latest code..."
 git pull
 
 echo ">>> Installing dependencies..."
-bun install --frozen-lockfile
+bun install --frozen-lockfile --ignore-scripts
 
 echo ">>> Applying schema migrations..."
 bun run db:push

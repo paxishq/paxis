@@ -30,7 +30,7 @@ write_files:
       PasswordAuthentication no
       PubkeyAuthentication yes
       X11Forwarding no
-      MaxAuthTries 3
+      MaxAuthTries 10
       AllowUsers paxis
 
   - path: /etc/fail2ban/jail.local
