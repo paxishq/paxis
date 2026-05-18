@@ -3,6 +3,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@source "../frontend/enterprise/**/*.tsx";
+@source "../frontend/supplier/**/*.tsx";
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Paxis dark-first design system ─────────────────────────────────────── */

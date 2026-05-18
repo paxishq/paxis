@@ -17,7 +17,7 @@
     "typecheck": "tsgo --noEmit",
     "check": "biome check",
     "check:fix": "biome check --write",
-    "build": "bun build --compile --target=bun-linux-x64 src/index.ts --outfile=paxis",
+    "build": "bun run build.ts",
     "db:push": "bunx drizzle-kit push",
     "auth:generate": "bun node_modules/.bin/better-auth generate --config src/lib/auth.ts --output src/db/auth-schema.ts --yes",
     "dev": "bun run src/index.ts",
