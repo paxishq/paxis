@@ -13,7 +13,7 @@ echo ">>> Installing dependencies..."
 "$BUN" install --frozen-lockfile
 
 echo ">>> Applying schema migrations..."
-source /etc/paxis.env
+set -a; source /etc/paxis.env; set +a
 "$BUN" x drizzle-kit push
 
 echo ">>> Building binary..."
