@@ -10,6 +10,10 @@ export const auth = betterAuth({
   }),
   secret: Bun.env.BETTER_AUTH_SECRET!,
   baseURL: Bun.env.BETTER_AUTH_URL ?? "http://localhost:15150",
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: false,
+  },
   socialProviders: {
     google: {
       clientId: Bun.env.GOOGLE_CLIENT_ID!,
