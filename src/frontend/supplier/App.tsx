@@ -372,14 +372,12 @@ function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await authClient.signIn.email({
-      email,
-      password,
-      callbackURL: "/supplier",
-    });
+    const result = await authClient.signIn.email({ email, password });
     if (result.error) {
       setError("Invalid email or password.");
       setLoading(false);
+    } else {
+      window.location.href = "/supplier";
     }
   }
 
